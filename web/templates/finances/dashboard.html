@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard Financiero{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        transition: transform 0.2s;
+    }
+    .stats-card:hover {
+        transform: translateY(-5px);
+    }
+    .category-card {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        border: none;
+    }
+    .credit-card {
+        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        color: #8b4513;
+        border: none;
+    }
+    .chart-container {
+        background: white;
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+    }
+    .upcoming-installment {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 10px;
+        transition: transform 0.2s;
+    }
+    .upcoming-installment:hover {
+        transform: translateX(5px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    .month-bar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 5px;
+        padding: 10px;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-chart-line"></i> Dashboard Financiero</h1>
+            <div>
+                <a href="{% url 'finances:expense_create' %}" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Nuevo Gasto
+                </a>
+                <a href="{% url 'finances:expense_list' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-list"></i> Ver Todos
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estadísticas Principales -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card stats-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Gastos del Mes</h5>
+                        <h3 class="mb-0">${{ month_total|floatformat:2 }}</h3>
+                        <small>{{ current_month }}/{{ current_year }}</small>
+                    </div>
+                    <div>
+                        <i class="fas fa-dollar-sign fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card stats-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Crédito Pendiente</h5>
+                        <h3 class="mb-0">${{ credit_pending|floatformat:2 }}</h3>
+                        <small>Total a pagar</small>
+                    </div>
+                    <div>
+                        <i class="fas fa-credit-card fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card stats-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Próximas Cuotas</h5>
+                        <h3 class="mb-0">{{ upcoming_installments.count }}</h3>
+                        <small>Próximo mes</small>
+                    </div>
+                    <div>
+                        <i class="fas fa-clock fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos y Estadísticas -->
+<div class="row">
+    <!-- Gastos por Categoría -->
+    <div class="col-lg-6">
+        <div class="chart-container">
+            <h5><i class="fas fa-chart-pie"></i> Gastos por Categoría ({{ current_month }}/{{ current_year }})</h5>
+            {% if expenses_by_category %}
+                {% for category in expenses_by_category %}
+                <div class="category-card mb-2">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ category.category__name }}</strong>
+                            </div>
+                            <div>
+                                <strong>${{ category.total|floatformat:2 }}</strong>
+                            </div>
+                        </div>
+                        <div class="progress mt-2" style="height: 8px;">
+                            {% widthratio category.total month_total 100 as percentage %}
+                            <div class="progress-bar" role="progressbar" style="width: {{ percentage }}%"></div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No hay gastos este mes</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Historial de Últimos 6 Meses -->
+    <div class="col-lg-6">
+        <div class="chart-container">
+            <h5><i class="fas fa-chart-bar"></i> Historial de Gastos (Últimos 6 meses)</h5>
+            {% if months_data %}
+                {% for month in months_data %}
+                <div class="month-bar">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ month.month_name }} {{ month.year }}</strong>
+                        </div>
+                        <div>
+                            <strong>${{ month.total|floatformat:2 }}</strong>
+                        </div>
+                    </div>
+                    <div class="progress mt-2" style="height: 8px; background: rgba(255,255,255,0.3);">
+                        {% if month.total > 0 %}
+                            {% widthratio month.total month_total 100 as percentage %}
+                            <div class="progress-bar bg-white" role="progressbar" style="width: {{ percentage }}%"></div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No hay datos históricos</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Próximas Cuotas -->
+{% if upcoming_installments %}
+<div class="row">
+    <div class="col-12">
+        <div class="chart-container">
+            <h5><i class="fas fa-exclamation-triangle"></i> Próximas Cuotas ({{ upcoming_installments.0.date|date:"F Y" }})</h5>
+            <div class="row">
+                {% for installment in upcoming_installments %}
+                <div class="col-md-6 col-lg-4">
+                    <div class="upcoming-installment">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="mb-0">{{ installment.name|truncatechars:25 }}</h6>
+                            <span class="badge bg-warning text-dark">
+                                Cuota {{ installment.current_installment }}/{{ installment.installments }}
+                            </span>
+                        </div>
+                        <p class="mb-1">
+                            <strong class="text-primary">${{ installment.amount|floatformat:2 }}</strong>
+                        </p>
+                        <p class="mb-1">
+                            <small class="text-muted">
+                                <i class="fas fa-calendar"></i> {{ installment.date|date:"d/m/Y" }}
+                            </small>
+                        </p>
+                        <p class="mb-0">
+                            <small class="text-danger">
+                                <i class="fas fa-exclamation-triangle"></i> Resta: ${{ installment.remaining_amount|floatformat:2 }}
+                            </small>
+                        </p>
+                        <div class="mt-2">
+                            <a href="{% url 'finances:expense_detail' installment.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-eye"></i> Ver
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Acciones Rápidas -->
+<div class="row">
+    <div class="col-12">
+        <div class="chart-container">
+            <h5><i class="fas fa-bolt"></i> Acciones Rápidas</h5>
+            <div class="row">
+                <div class="col-md-3">
+                    <a href="{% url 'finances:expense_create' %}" class="btn btn-success w-100 mb-2">
+                        <i class="fas fa-plus"></i><br>
+                        <small>Nuevo Gasto</small>
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{% url 'finances:expense_list' %}" class="btn btn-primary w-100 mb-2">
+                        <i class="fas fa-list"></i><br>
+                        <small>Ver Gastos</small>
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{% url 'finances:export_expenses' %}" class="btn btn-outline-primary w-100 mb-2">
+                        <i class="fas fa-download"></i><br>
+                        <small>Exportar</small>
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary w-100 mb-2">
+                        <i class="fas fa-home"></i><br>
+                        <small>Dashboard Principal</small>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Animaciones para las tarjetas
+    const cards = document.querySelectorAll('.stats-card, .category-card, .credit-card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+    
+    // Tooltips para las barras de progreso
+    const progressBars = document.querySelectorAll('.progress-bar');
+    progressBars.forEach(bar => {
+        const percentage = bar.style.width;
+        bar.title = `${percentage} completado`;
+    });
+});
+</script>
+{% endblock %}

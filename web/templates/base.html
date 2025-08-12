@@ -35,6 +35,11 @@ function copyToClipboard(text) {
                             <i class="fas fa-tachometer-alt"></i> Dashboard
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'finances:expense_list' %}">
+                            <i class="fas fa-receipt"></i> Finanzas
+                        </a>
+                    </li>
 
                     {% if user.can_manage_users %}
                     <li class="nav-item">

@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Eliminar Gasto{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    .delete-header {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        border-radius: 15px 15px 0 0;
+        padding: 20px;
+        text-align: center;
+    }
+    .delete-body {
+        padding: 30px;
+        text-align: center;
+    }
+    .expense-info {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 0;
+        text-align: left;
+    }
+    .warning-message {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 20px 0;
+        color: #856404;
+    }
+    .danger-zone {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 0;
+        color: #721c24;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-center">
+            <div class="delete-card">
+                <div class="delete-header">
+                    <h2><i class="fas fa-exclamation-triangle"></i> Confirmar Eliminación</h2>
+                    <p class="mb-0">¿Estás seguro de que quieres eliminar este gasto?</p>
+                </div>
+                
+                <div class="delete-body">
+                    <!-- Información del Gasto -->
+                    <div class="expense-info">
+                        <h5><i class="fas fa-receipt"></i> Información del Gasto</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Nombre:</strong> {{ expense.name }}</p>
+                                <p><strong>Fecha:</strong> {{ expense.date|date:"d/m/Y" }}</p>
+                                <p><strong>Categoría:</strong> {{ expense.category.name }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Monto:</strong> <span class="text-primary">${{ expense.amount|floatformat:2 }}</span></p>
+                                <p><strong>Método de Pago:</strong> {{ expense.payment_method.name }}</p>
+                                <p><strong>Tipo:</strong> {{ expense.get_payment_type_display }}</p>
+                            </div>
+                        </div>
+                        
+                        {% if expense.description %}
+                        <p><strong>Descripción:</strong> {{ expense.description }}</p>
+                        {% endif %}
+                        
+                        {% if expense.is_credit %}
+                        <div class="warning-message">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>¡Atención!</strong> Este es un gasto a crédito con {{ expense.installments }} cuotas.
+                            <br>
+                            <small>Al eliminar este gasto, se eliminarán todas las cuotas relacionadas.</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Zona de Peligro -->
+                    <div class="danger-zone">
+                        <h6><i class="fas fa-radiation"></i> Zona de Peligro</h6>
+                        <p class="mb-0">
+                            <strong>Esta acción no se puede deshacer.</strong> 
+                            El gasto será eliminado permanentemente de la base de datos.
+                        </p>
+                    </div>
+                    
+                    <!-- Botones de Acción -->
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                            <button type="submit" class="btn btn-danger btn-lg me-md-2">
+                                <i class="fas fa-trash"></i> Sí, Eliminar
+                            </button>
+                            <a href="{% url 'finances:expense_detail' expense.id %}" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                    
+                    <!-- Enlaces de Navegación -->
+                    <div class="mt-4">
+                        <small class="text-muted">
+                            <a href="{% url 'finances:expense_list' %}" class="text-decoration-none">
+                                <i class="fas fa-arrow-left"></i> Volver a la lista
+                            </a>
+                            |
+                            <a href="{% url 'finances:expense_create' %}" class="text-decoration-none">
+                                <i class="fas fa-plus"></i> Crear nuevo gasto
+                            </a>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

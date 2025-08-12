@@ -1,0 +1,305 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Detalle del Gasto{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+    }
+    .detail-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px 15px 0 0;
+        padding: 20px;
+    }
+    .detail-body {
+        padding: 20px;
+    }
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+    }
+    .info-row:last-child {
+        border-bottom: none;
+    }
+    .info-label {
+        font-weight: 600;
+        color: #495057;
+    }
+    .info-value {
+        color: #6c757d;
+    }
+    .credit-badge {
+        background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9em;
+    }
+    .related-expense {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 10px;
+        transition: transform 0.2s;
+    }
+    .related-expense:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    .installment-badge {
+        background: #ffc107;
+        color: #212529;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-eye"></i> Detalle del Gasto</h1>
+            <div>
+                <a href="{% url 'finances:expense_edit' expense.id %}" class="btn btn-warning">
+                    <i class="fas fa-edit"></i> Editar
+                </a>
+                <a href="{% url 'finances:expense_list' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> Volver
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Información Principal del Gasto -->
+        <div class="detail-card">
+            <div class="detail-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="mb-0">{{ expense.name }}</h3>
+                        <p class="mb-0">{{ expense.date|date:"l, d 'de' F 'de' Y" }}</p>
+                    </div>
+                    <div class="text-end">
+                        <h2 class="mb-0">${{ expense.amount|floatformat:2 }}</h2>
+                        {% if expense.is_credit %}
+                            <span class="credit-badge">
+                                <i class="fas fa-credit-card"></i> Crédito
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="detail-body">
+                <!-- Información Básica -->
+                <div class="info-row">
+                    <span class="info-label">Categoría:</span>
+                    <span class="info-value">
+                        <i class="{{ expense.category.icon }}"></i> {{ expense.category.name }}
+                    </span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Método de Pago:</span>
+                    <span class="info-value">
+                        <i class="fas fa-credit-card"></i> {{ expense.payment_method.name }}
+                    </span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Tipo de Pago:</span>
+                    <span class="info-value">{{ expense.get_payment_type_display }}</span>
+                </div>
+                
+                {% if expense.other_payment_method %}
+                <div class="info-row">
+                    <span class="info-label">Método Específico:</span>
+                    <span class="info-value">{{ expense.other_payment_method }}</span>
+                </div>
+                {% endif %}
+                
+                {% if expense.description %}
+                <div class="info-row">
+                    <span class="info-label">Descripción:</span>
+                    <span class="info-value">{{ expense.description }}</span>
+                </div>
+                {% endif %}
+                
+                <!-- Información de Crédito -->
+                {% if expense.is_credit %}
+                <hr class="my-4">
+                <h5><i class="fas fa-clock"></i> Información de Crédito</h5>
+                
+                <div class="info-row">
+                    <span class="info-label">Monto Total del Crédito:</span>
+                    <span class="info-value text-primary">
+                        <strong>${{ expense.total_credit_amount|floatformat:2 }}</strong>
+                    </span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Cuota Actual:</span>
+                    <span class="info-value">
+                        <span class="installment-badge">
+                            {{ expense.current_installment }} de {{ expense.installments }}
+                        </span>
+                    </span>
+                </div>
+                
+                {% if expense.remaining_amount %}
+                <div class="info-row">
+                    <span class="info-label">Monto Restante:</span>
+                    <span class="info-value text-danger">
+                        <strong>${{ expense.remaining_amount|floatformat:2 }}</strong>
+                    </span>
+                </div>
+                {% endif %}
+                
+                {% if expense.get_next_installment_date %}
+                <div class="info-row">
+                    <span class="info-label">Próxima Cuota:</span>
+                    <span class="info-value text-warning">
+                        <strong>{{ expense.get_next_installment_date|date:"d/m/Y" }}</strong>
+                    </span>
+                </div>
+                {% endif %}
+                {% endif %}
+                
+                <!-- Información de Auditoría -->
+                <hr class="my-4">
+                <h6 class="text-muted"><i class="fas fa-info-circle"></i> Información del Sistema</h6>
+                
+                <div class="info-row">
+                    <span class="info-label">Creado:</span>
+                    <span class="info-value">{{ expense.created_at|date:"d/m/Y H:i" }}</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Última Actualización:</span>
+                    <span class="info-value">{{ expense.updated_at|date:"d/m/Y H:i" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- Acciones Rápidas -->
+        <div class="detail-card">
+            <div class="detail-header">
+                <h5 class="mb-0"><i class="fas fa-bolt"></i> Acciones</h5>
+            </div>
+            <div class="detail-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'finances:expense_edit' expense.id %}" class="btn btn-warning">
+                        <i class="fas fa-edit"></i> Editar Gasto
+                    </a>
+                    <a href="{% url 'finances:expense_delete' expense.id %}" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Eliminar Gasto
+                    </a>
+                    <a href="{% url 'finances:expense_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-list"></i> Ver Todos los Gastos
+                    </a>
+                    <a href="{% url 'finances:expense_create' %}" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Nuevo Gasto
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Estadísticas Rápidas -->
+        <div class="detail-card">
+            <div class="detail-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Estadísticas</h5>
+            </div>
+            <div class="detail-body">
+                <div class="text-center">
+                    <h4 class="text-primary">${{ expense.amount|floatformat:2 }}</h4>
+                    <p class="text-muted mb-0">Monto de esta cuota</p>
+                    
+                    {% if expense.is_credit %}
+                    <hr class="my-3">
+                    <h5 class="text-warning">{{ expense.get_remaining_installments }}</h5>
+                    <p class="text-muted mb-0">Cuotas restantes</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cuotas Relacionadas (solo para créditos) -->
+{% if related_expenses and expense.is_credit %}
+<div class="row">
+    <div class="col-12">
+        <div class="detail-card">
+            <div class="detail-header">
+                <h5 class="mb-0"><i class="fas fa-list-ol"></i> Todas las Cuotas</h5>
+            </div>
+            <div class="detail-body">
+                <div class="row">
+                    {% for related_expense in related_expenses %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="related-expense {% if related_expense.id == expense.id %}border-primary{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0">{{ related_expense.name|truncatechars:20 }}</h6>
+                                <span class="installment-badge">
+                                    {{ related_expense.current_installment }}/{{ related_expense.installments }}
+                                </span>
+                            </div>
+                            
+                            <p class="mb-1">
+                                <strong class="text-primary">${{ related_expense.amount|floatformat:2 }}</strong>
+                            </p>
+                            
+                            <p class="mb-1">
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar"></i> {{ related_expense.date|date:"d/m/Y" }}
+                                </small>
+                            </p>
+                            
+                            {% if related_expense.remaining_amount %}
+                            <p class="mb-2">
+                                <small class="text-danger">
+                                    <i class="fas fa-exclamation-triangle"></i> Resta: ${{ related_expense.remaining_amount|floatformat:2 }}
+                                </small>
+                            </p>
+                            {% endif %}
+                            
+                            <div class="d-flex gap-1">
+                                <a href="{% url 'finances:expense_detail' related_expense.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if related_expense.id == expense.id %}
+                                    <span class="btn btn-sm btn-primary disabled">
+                                        <i class="fas fa-check"></i> Actual
+                                    </span>
+                                {% else %}
+                                    <a href="{% url 'finances:expense_edit' related_expense.id %}" class="btn btn-sm btn-outline-warning">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

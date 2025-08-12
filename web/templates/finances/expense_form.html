@@ -1,0 +1,336 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .form-section h5 {
+        color: #495057;
+        border-bottom: 2px solid #dee2e6;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+    .credit-info {
+        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        border: 1px solid #ffd8a8;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .credit-info i {
+        color: #e67700;
+    }
+    .form-group {
+        margin-bottom: 1rem;
+    }
+    .form-label {
+        font-weight: 600;
+        color: #495057;
+    }
+    .required-field::after {
+        content: " *";
+        color: #dc3545;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-edit"></i> {{ title }}</h1>
+            <a href="{% url 'finances:expense_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <form method="post" class="needs-validation" novalidate>
+            {% csrf_token %}
+            
+            <!-- Información Básica -->
+            <div class="form-section">
+                <h5><i class="fas fa-info-circle"></i> Información Básica</h5>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label required-field">Fecha</label>
+                            {{ form.date }}
+                            {% if form.date.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.date.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label required-field">Nombre del Gasto</label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.name.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label required-field">Monto</label>
+                            {{ form.amount }}
+                            {% if form.amount.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.amount.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label required-field">Categoría</label>
+                            {{ form.category }}
+                            {% if form.category.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.category.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Descripción</label>
+                    {{ form.description }}
+                    {% if form.description.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.description.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Información de Pago -->
+            <div class="form-section">
+                <h5><i class="fas fa-credit-card"></i> Información de Pago</h5>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label required-field">Método de Pago</label>
+                            {{ form.payment_method }}
+                            {% if form.payment_method.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.payment_method.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label required-field">Tipo de Pago</label>
+                            {{ form.payment_type }}
+                            {% if form.payment_type.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.payment_type.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="other-payment-method-group" style="display: none;">
+                    <label class="form-label">Especificar Método de Pago</label>
+                    {{ form.other_payment_method }}
+                    {% if form.other_payment_method.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.other_payment_method.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Información de Crédito -->
+            <div class="form-section">
+                <h5><i class="fas fa-clock"></i> Información de Crédito</h5>
+                
+                <div class="credit-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Información:</strong> Al marcar como crédito, el sistema creará automáticamente las cuotas futuras.
+                    La primera cuota se registrará con monto 0 y las siguientes se distribuirán en los meses siguientes.
+                </div>
+                
+                <div class="form-group">
+                    <div class="form-check">
+                        {{ form.is_credit }}
+                        <label class="form-check-label" for="{{ form.is_credit.id_for_label }}">
+                            Es un gasto a crédito
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="row" id="credit-fields" style="display: none;">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Monto Total del Crédito</label>
+                            {{ form.total_credit_amount }}
+                            {% if form.total_credit_amount.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.total_credit_amount.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Número de Cuotas</label>
+                            {{ form.installments }}
+                            {% if form.installments.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.installments.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Botones -->
+            <div class="form-section text-center">
+                <button type="submit" class="btn btn-success btn-lg me-3">
+                    <i class="fas fa-save"></i> Guardar Gasto
+                </button>
+                <a href="{% url 'finances:expense_list' %}" class="btn btn-outline-secondary btn-lg">
+                    <i class="fas fa-times"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const paymentTypeSelect = document.querySelector('select[name="payment_type"]');
+    const otherPaymentMethodGroup = document.getElementById('other-payment-method-group');
+    const isCreditCheckbox = document.querySelector('input[name="is_credit"]');
+    const creditFields = document.getElementById('credit-fields');
+    const totalCreditAmountField = document.querySelector('input[name="total_credit_amount"]');
+    const installmentsField = document.querySelector('input[name="installments"]');
+    
+    // Mostrar/ocultar campo "Otro método de pago"
+    function toggleOtherPaymentMethod() {
+        if (paymentTypeSelect.value === 'other') {
+            otherPaymentMethodGroup.style.display = 'block';
+            otherPaymentMethodGroup.querySelector('input').required = true;
+        } else {
+            otherPaymentMethodGroup.style.display = 'none';
+            otherPaymentMethodGroup.querySelector('input').required = false;
+        }
+    }
+    
+    // Mostrar/ocultar campos de crédito
+    function toggleCreditFields() {
+        if (isCreditCheckbox.checked && paymentTypeSelect.value === 'credit') {
+            creditFields.style.display = 'block';
+            totalCreditAmountField.required = true;
+            installmentsField.required = true;
+        } else {
+            creditFields.style.display = 'none';
+            totalCreditAmountField.required = false;
+            installmentsField.required = false;
+        }
+    }
+    
+    // Validación del formulario
+    function validateForm() {
+        const form = document.querySelector('form');
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        form.classList.add('was-validated');
+    }
+    
+    // Event listeners
+    if (paymentTypeSelect) {
+        paymentTypeSelect.addEventListener('change', function() {
+            toggleOtherPaymentMethod();
+            toggleCreditFields();
+        });
+    }
+    
+    if (isCreditCheckbox) {
+        isCreditCheckbox.addEventListener('change', toggleCreditFields);
+    }
+    
+    // Ejecutar al cargar
+    toggleOtherPaymentMethod();
+    toggleCreditFields();
+    
+    // Validación del formulario
+    const form = document.querySelector('form');
+    form.addEventListener('submit', validateForm);
+    
+    // Calcular monto por cuota automáticamente
+    if (totalCreditAmountField && installmentsField) {
+        function calculateInstallmentAmount() {
+            const total = parseFloat(totalCreditAmountField.value) || 0;
+            const installments = parseInt(installmentsField.value) || 1;
+            
+            if (total > 0 && installments > 0) {
+                const amountPerInstallment = total / installments;
+                // Mostrar información al usuario
+                const infoDiv = document.getElementById('installment-info');
+                if (!infoDiv) {
+                    const div = document.createElement('div');
+                    div.id = 'installment-info';
+                    div.className = 'alert alert-info mt-2';
+                    div.innerHTML = `<i class="fas fa-calculator"></i> <strong>Monto por cuota:</strong> $${amountPerInstallment.toFixed(2)}`;
+                    installmentsField.parentNode.appendChild(div);
+                } else {
+                    infoDiv.innerHTML = `<i class="fas fa-calculator"></i> <strong>Monto por cuota:</strong> $${amountPerInstallment.toFixed(2)}`;
+                }
+            }
+        }
+        
+        totalCreditAmountField.addEventListener('input', calculateInstallmentAmount);
+        installmentsField.addEventListener('input', calculateInstallmentAmount);
+    }
+});
+</script>
+{% endblock %}

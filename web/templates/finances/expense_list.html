@@ -1,0 +1,286 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Gastos{% endblock %}
+
+{% block extra_css %}
+<style>
+    .expense-card {
+        transition: transform 0.2s;
+    }
+    .expense-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .credit-badge {
+        background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        color: white;
+        font-size: 0.8em;
+        padding: 2px 8px;
+        border-radius: 12px;
+    }
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+    }
+    .filter-section {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .category-badge {
+        font-size: 0.8em;
+        padding: 4px 8px;
+        border-radius: 15px;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-receipt"></i> Mis Gastos</h1>
+            <div>
+                <a href="{% url 'finances:expense_create' %}" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Nuevo Gasto
+                </a>
+                <a href="{% url 'finances:export_expenses' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-download"></i> Exportar
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card stats-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Total Gastos</h5>
+                        <h3 class="mb-0">${{ total_expenses|floatformat:2 }}</h3>
+                    </div>
+                    <div>
+                        <i class="fas fa-dollar-sign fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card stats-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Crédito Pendiente</h5>
+                        <h3 class="mb-0">${{ total_credit_pending|floatformat:2 }}</h3>
+                    </div>
+                    <div>
+                        <i class="fas fa-credit-card fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="filter-section">
+    <h5><i class="fas fa-filter"></i> Filtros</h5>
+    <form method="get" class="row g-3">
+        <div class="col-md-2">
+            <label class="form-label">Desde</label>
+            {{ form.date_from }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Hasta</label>
+            {{ form.date_to }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Categoría</label>
+            {{ form.category }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Tipo de Pago</label>
+            {{ form.payment_type }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Crédito</label>
+            {{ form.is_credit }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Monto Mín</label>
+            {{ form.min_amount }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Monto Máx</label>
+            {{ form.max_amount }}
+        </div>
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-search"></i> Filtrar
+            </button>
+            <a href="{% url 'finances:expense_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-times"></i> Limpiar
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Lista de Gastos -->
+<div class="row">
+    {% if page_obj %}
+        {% for expense in page_obj %}
+        <div class="col-md-6 col-lg-4 mb-3">
+            <div class="card expense-card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <small class="text-muted">{{ expense.date|date:"d/m/Y" }}</small>
+                    {% if expense.is_credit %}
+                        <span class="credit-badge">
+                            <i class="fas fa-credit-card"></i> Crédito
+                        </span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <h6 class="card-title">{{ expense.name|truncatechars:30 }}</h6>
+                    <p class="card-text">
+                        <strong class="text-primary">${{ expense.amount|floatformat:2 }}</strong>
+                    </p>
+                    <div class="mb-2">
+                        <span class="category-badge" style="background-color: {{ expense.category.color }}">
+                            <i class="{{ expense.category.icon }}"></i> {{ expense.category.name }}
+                        </span>
+                    </div>
+                    <p class="card-text">
+                        <small class="text-muted">
+                            <i class="fas fa-credit-card"></i> {{ expense.payment_method.name }}
+                        </small>
+                    </p>
+                    {% if expense.is_credit %}
+                        <p class="card-text">
+                            <small class="text-warning">
+                                <i class="fas fa-clock"></i> Cuota {{ expense.current_installment }}/{{ expense.installments }}
+                            </small>
+                        </p>
+                        {% if expense.remaining_amount %}
+                            <p class="card-text">
+                                <small class="text-danger">
+                                    <i class="fas fa-exclamation-triangle"></i> Resta: ${{ expense.remaining_amount|floatformat:2 }}
+                                </small>
+                            </p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="card-footer">
+                    <div class="btn-group w-100" role="group">
+                        <a href="{% url 'finances:expense_detail' expense.id %}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                        <a href="{% url 'finances:expense_edit' expense.id %}" class="btn btn-sm btn-outline-warning">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <a href="{% url 'finances:expense_delete' expense.id %}" class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-trash"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="col-12">
+            <div class="text-center py-5">
+                <i class="fas fa-receipt fa-4x text-muted mb-3"></i>
+                <h4 class="text-muted">No hay gastos registrados</h4>
+                <p class="text-muted">Comienza agregando tu primer gasto</p>
+                <a href="{% url 'finances:expense_create' %}" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Agregar Gasto
+                </a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Paginación -->
+{% if page_obj.has_other_pages %}
+<nav aria-label="Paginación de gastos" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            </li>
+        {% endif %}
+        
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+                <li class="page-item active">
+                    <span class="page-link">{{ num }}</span>
+                </li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">{{ num }}</a>
+                </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Mostrar/ocultar campos de crédito según el tipo de pago
+    const paymentTypeSelect = document.querySelector('select[name="payment_type"]');
+    const creditFields = document.querySelectorAll('.credit-field');
+    const isCreditCheckbox = document.querySelector('input[name="is_credit"]');
+    
+    function toggleCreditFields() {
+        const isCredit = isCreditCheckbox.checked;
+        const isCreditPayment = paymentTypeSelect.value === 'credit';
+        
+        creditFields.forEach(field => {
+            if (isCredit && isCreditPayment) {
+                field.closest('.form-group').style.display = 'block';
+                field.required = true;
+            } else {
+                field.closest('.form-group').style.display = 'none';
+                field.required = false;
+            }
+        });
+    }
+    
+    if (paymentTypeSelect && isCreditCheckbox) {
+        paymentTypeSelect.addEventListener('change', toggleCreditFields);
+        isCreditCheckbox.addEventListener('change', toggleCreditFields);
+        toggleCreditFields(); // Ejecutar al cargar
+    }
+});
+</script>
+{% endblock %}

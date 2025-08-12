@@ -10,4 +10,5 @@ urlpatterns = [
     path('dashboard/', dashboard, name='dashboard'),
 
     path('accounts/', include('accounts.urls')), # Incluye las URLs de la aplicación 'accounts'
+    path('finances/', include('finances.urls')), # Incluye las URLs de la aplicación 'finances'
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

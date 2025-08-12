@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'accounts',
     'core',
+    'finances',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
