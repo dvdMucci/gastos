@@ -1,0 +1,240 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Estimaciones Mensuales{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1><i class="fas fa-calendar-alt"></i> Estimaciones Mensuales</h1>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'forecasts:generate_forecasts' %}" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> Regenerar
+                    </a>
+                    <a href="{% url 'forecasts:forecast_dashboard' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Volver al Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Año</label>
+                    {{ form.year }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Mes</label>
+                    {{ form.month }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Monto Mínimo</label>
+                    {{ form.min_amount }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Monto Máximo</label>
+                    {{ form.max_amount }}
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{% url 'forecasts:monthly_forecasts' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-times"></i> Limpiar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Resumen -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Total Proyectado</h6>
+                            <h3 class="mb-0">${{ total_projected|floatformat:2 }}</h3>
+                        </div>
+                        <div>
+                            <i class="fas fa-chart-line fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Promedio Mensual</h6>
+                            <h3 class="mb-0">${{ avg_monthly|floatformat:2 }}</h3>
+                        </div>
+                        <div>
+                            <i class="fas fa-calculator fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de estimaciones mensuales -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-table"></i> Desglose Mensual</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mes</th>
+                            <th>Suscripciones</th>
+                            <th>Créditos</th>
+                            <th>Estimaciones</th>
+                            <th>Otros Gastos</th>
+                            <th>Total</th>
+                            <th>Tipo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for forecast in page_obj %}
+                        <tr>
+                            <td>
+                                <strong>{{ forecast.month|date:"F Y" }}</strong>
+                                {% if forecast.month|date:"m" == "01" and forecast.month|date:"Y" == "2025" %}
+                                    <br><small class="text-muted">Mes actual</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if forecast.actual_subscriptions %}
+                                    <span class="badge bg-success">${{ forecast.actual_subscriptions|floatformat:2 }}</span>
+                                    <br><small class="text-muted">Real</small>
+                                {% elif forecast.projected_subscriptions %}
+                                    <span class="badge bg-success">${{ forecast.projected_subscriptions|floatformat:2 }}</span>
+                                    <br><small class="text-muted">Proyectado</small>
+                                {% elif forecast.current_month_estimated %}
+                                    <span class="badge bg-success">${{ forecast.current_month_estimated|floatformat:2 }}</span>
+                                    <br><small class="text-muted">Estimado</small>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if forecast.actual_credits %}
+                                    <span class="badge bg-warning">${{ forecast.actual_credits|floatformat:2 }}</span>
+                                    <br><small class="text-muted">Real</small>
+                                {% elif forecast.projected_credits %}
+                                    <span class="badge bg-warning">${{ forecast.projected_credits|floatformat:2 }}</span>
+                                    <br><small class="text-muted">Proyectado</small>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if forecast.projected_estimates %}
+                                    <span class="badge bg-info">${{ forecast.projected_estimates|floatformat:2 }}</span>
+                                    <br><small class="text-muted">Proyectado</small>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if forecast.actual_other_expenses %}
+                                    <span class="badge bg-secondary">${{ forecast.actual_other_expenses|floatformat:2 }}</span>
+                                    <br><small class="text-muted">Real</small>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong class="text-primary">${{ forecast.total_projected|floatformat:2 }}</strong>
+                                {% if forecast.current_month_actual %}
+                                    <br><small class="text-muted">Real: ${{ forecast.current_month_actual|floatformat:2 }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if forecast.actual_subscriptions or forecast.actual_credits or forecast.actual_other_expenses %}
+                                    <span class="badge bg-success">Histórico</span>
+                                {% elif forecast.current_month_estimated or forecast.current_month_actual %}
+                                    <span class="badge bg-warning">Mes Actual</span>
+                                {% else %}
+                                    <span class="badge bg-info">Futuro</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                <div class="text-muted">
+                                    <i class="fas fa-inbox fa-2x mb-2"></i>
+                                    <p>No se encontraron estimaciones mensuales</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginación -->
+    {% if page_obj.has_other_pages %}
+    <nav aria-label="Paginación de estimaciones mensuales" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-angle-left"></i>
+                    </a>
+                </li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-angle-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

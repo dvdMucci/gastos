@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard de Suscripciones{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-sync-alt"></i> Dashboard de Suscripciones</h1>
+            <a href="{% url 'subscriptions:subscription_list' %}" class="btn btn-primary">
+                <i class="fas fa-list"></i> Ver Todas
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen General -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <i class="fas fa-calendar-day fa-2x mb-2"></i>
+                <h5>Total Mensual Activo</h5>
+                <h3>${{ monthly_total|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <i class="fas fa-sync-alt fa-2x mb-2"></i>
+                <h5>Total Activo</h5>
+                <h3>${{ total_active|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Próximos Pagos -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-calendar-alt"></i> Próximos Pagos ({{ next_month }}/{{ next_year }})</h5>
+            </div>
+            <div class="card-body">
+                {% if upcoming_payments %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Usuario</th>
+                                    <th>Monto</th>
+                                    <th>Fecha</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for subscription in upcoming_payments %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ subscription.name }}</strong>
+                                        {% if subscription.description %}
+                                            <br><small class="text-muted">{{ subscription.description|truncatechars:50 }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ subscription.user.username }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success">${{ subscription.amount|floatformat:2 }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ subscription.next_payment_date|date:"d/m/Y" }}</span>
+                                    </td>
+                                    <td>
+                                        {% if subscription.is_overdue %}
+                                            <span class="badge bg-danger">Vencida</span>
+                                        {% elif subscription.is_due_soon %}
+                                            <span class="badge bg-warning">Próxima</span>
+                                        {% else %}
+                                            <span class="badge bg-success">Al día</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'subscriptions:subscription_detail' subscription.id %}" class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <p class="text-muted">No hay pagos programados para el próximo mes.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Suscripciones Próximas a Vencer -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-warning text-white">
+                <h5><i class="fas fa-clock"></i> Próximas a Vencer</h5>
+            </div>
+            <div class="card-body">
+                {% if due_soon %}
+                    <div class="list-group list-group-flush">
+                        {% for subscription in due_soon %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ subscription.name }}</strong>
+                                <br><small class="text-muted">{{ subscription.user.username }}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-success">${{ subscription.amount|floatformat:2 }}</span>
+                                <br><small class="text-muted">{{ subscription.next_payment_date|date:"d/m/Y" }}</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center">No hay suscripciones próximas a vencer.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5><i class="fas fa-exclamation-triangle"></i> Vencidas</h5>
+            </div>
+            <div class="card-body">
+                {% if overdue %}
+                    <div class="list-group list-group-flush">
+                        {% for subscription in overdue %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ subscription.name }}</strong>
+                                <br><small class="text-muted">{{ subscription.user.username }}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-success">${{ subscription.amount|floatformat:2 }}</span>
+                                <br><small class="text-muted">{{ subscription.next_payment_date|date:"d/m/Y" }}</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center">No hay suscripciones vencidas.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Historial de Últimos 6 Meses -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-line"></i> Historial de Últimos 6 Meses</h5>
+            </div>
+            <div class="card-body">
+                {% if months_data %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Mes</th>
+                                    <th>Total</th>
+                                    <th>Barra de Progreso</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for month in months_data %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ month.month_name }} {{ month.year }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary">${{ month.total|floatformat:2 }}</span>
+                                    </td>
+                                    <td>
+                                        <div class="progress">
+                                            {% if monthly_total > 0 %}
+                                                {% widthratio month.total monthly_total 100 as percentage %}
+                                            {% else %}
+                                                {% widthratio month.total 1 100 as percentage %}
+                                            {% endif %}
+                                            <div class="progress-bar" role="progressbar" style="width: {{ percentage }}%" 
+                                                 aria-valuenow="{{ percentage }}" aria-valuemin="0" aria-valuemax="100">
+                                                {{ percentage }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center">No hay datos históricos disponibles.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

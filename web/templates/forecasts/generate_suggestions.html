@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Generar Sugerencias Automáticas{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0">
+                        <i class="fas fa-magic"></i> Generar Sugerencias Automáticas
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>¿Cómo funcionan las sugerencias automáticas?</strong>
+                        <br>
+                        El sistema analizará tus gastos de los últimos meses (excluyendo créditos y suscripciones) 
+                        para sugerir estimaciones futuras basadas en patrones de gasto reales.
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="months_back" class="form-label">Meses hacia atrás para analizar</label>
+                            <select name="months_back" id="months_back" class="form-control">
+                                <option value="3">3 meses</option>
+                                <option value="6" selected>6 meses (recomendado)</option>
+                                <option value="12">12 meses</option>
+                            </select>
+                            <div class="form-text">
+                                Cuantos más meses analice, más precisas serán las sugerencias.
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'forecasts:forecast_dashboard' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Volver
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-magic"></i> Generar Sugerencias
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

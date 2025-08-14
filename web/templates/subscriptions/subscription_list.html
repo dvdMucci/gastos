@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+
+{% block title %}Suscripciones{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-sync-alt"></i> Suscripciones</h1>
+            <a href="{% url 'subscriptions:subscription_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Nueva Suscripción
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-filter"></i> Filtros</h5>
+            </div>
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-2">
+                        {{ form.status.label_tag }}
+                        {{ form.status }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ form.frequency.label_tag }}
+                        {{ form.frequency }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ form.category.label_tag }}
+                        {{ form.category }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ form.payment_method.label_tag }}
+                        {{ form.payment_method }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ form.sort_order.label_tag }}
+                        {{ form.sort_order }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ form.search.label_tag }}
+                        {{ form.search }}
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                        <a href="{% url 'subscriptions:subscription_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Limpiar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5>Total Mensual Activo</h5>
+                <h3>${{ total_monthly|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5>Total Activo</h5>
+                <h3>${{ total_active|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de Suscripciones -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list"></i> Lista de Suscripciones</h5>
+            </div>
+            <div class="card-body">
+                {% if page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Usuario</th>
+                                    <th>Monto</th>
+                                    <th>Frecuencia</th>
+                                    <th>Estado</th>
+                                    <th>Próximo Pago</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for subscription in page_obj %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ subscription.name }}</strong>
+                                        {% if subscription.description %}
+                                            <br><small class="text-muted">{{ subscription.description|truncatechars:50 }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ subscription.user.username }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success">${{ subscription.amount|floatformat:2 }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ subscription.get_frequency_display }}</span>
+                                    </td>
+                                    <td>
+                                        {% if subscription.status == 'active' %}
+                                            <span class="badge bg-success">Activa</span>
+                                        {% elif subscription.status == 'paused' %}
+                                            <span class="badge bg-warning">Pausada</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Cancelada</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if subscription.is_overdue %}
+                                            <span class="badge bg-danger">{{ subscription.next_payment_date|date:"d/m/Y" }}</span>
+                                        {% elif subscription.is_due_soon %}
+                                            <span class="badge bg-warning">{{ subscription.next_payment_date|date:"d/m/Y" }}</span>
+                                        {% else %}
+                                            <span class="badge bg-info">{{ subscription.next_payment_date|date:"d/m/Y" }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{% url 'subscriptions:subscription_detail' subscription.id %}" class="btn btn-sm btn-info">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{% url 'subscriptions:subscription_edit' subscription.id %}" class="btn btn-sm btn-warning">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <a href="{% url 'subscriptions:subscription_delete' subscription.id %}" class="btn btn-sm btn-danger">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Paginación -->
+                    {% if page_obj.has_other_pages %}
+                    <nav aria-label="Paginación de suscripciones">
+                        <ul class="pagination justify-content-center">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+                                </li>
+                            {% endif %}
+                            
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ num }}</span>
+                                    </li>
+                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">Siguiente</a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <h5>No hay suscripciones</h5>
+                        <p class="text-muted">Crea tu primera suscripción para comenzar a gestionar gastos recurrentes.</p>
+                        <a href="{% url 'subscriptions:subscription_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Crear Suscripción
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

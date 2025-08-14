@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+    {% if form.instance.pk %}Editar Estimación{% else %}Nueva Estimación{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0">
+                        {% if form.instance.pk %}
+                            <i class="fas fa-edit"></i> Editar Estimación
+                        {% else %}
+                            <i class="fas fa-plus"></i> Nueva Estimación
+                        {% endif %}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.name.id_for_label }}" class="form-label">Nombre de la Estimación *</label>
+                                    {{ form.name }}
+                                    {% if form.name.errors %}
+                                        <div class="text-danger">{{ form.name.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.expense_type.id_for_label }}" class="form-label">Tipo de Gasto *</label>
+                                    {{ form.expense_type }}
+                                    {% if form.expense_type.errors %}
+                                        <div class="text-danger">{{ form.expense_type.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.category.id_for_label }}" class="form-label">Categoría *</label>
+                                    {{ form.category }}
+                                    {% if form.category.errors %}
+                                        <div class="text-danger">{{ form.category.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.amount.id_for_label }}" class="form-label">Monto Estimado *</label>
+                                    {{ form.amount }}
+                                    {% if form.amount.errors %}
+                                        <div class="text-danger">{{ form.amount.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.frequency.id_for_label }}" class="form-label">Frecuencia *</label>
+                                    {{ form.frequency }}
+                                    {% if form.frequency.errors %}
+                                        <div class="text-danger">{{ form.frequency.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.confidence.id_for_label }}" class="form-label">Nivel de Confianza *</label>
+                                    {{ form.confidence }}
+                                    {% if form.confidence.errors %}
+                                        <div class="text-danger">{{ form.confidence.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.start_date.id_for_label }}" class="form-label">Fecha de Inicio *</label>
+                                    {{ form.start_date }}
+                                    {% if form.start_date.errors %}
+                                        <div class="text-danger">{{ form.start_date.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.end_date.id_for_label }}" class="form-label">Fecha de Fin *</label>
+                                    {{ form.end_date }}
+                                    {% if form.end_date.errors %}
+                                        <div class="text-danger">{{ form.end_date.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">Descripción</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                                <div class="text-danger">{{ form.description.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                {{ form.is_active }}
+                                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                    Estimación activa
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'forecasts:forecast_dashboard' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Volver
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> 
+                                {% if form.instance.pk %}Actualizar{% else %}Crear{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const paymentMethodSelect = document.getElementById('id_payment_method');
+    const paymentTypeSelect = document.getElementById('id_payment_type');
+    
+    function updatePaymentTypes() {
+        const selectedMethod = paymentMethodSelect.value;
+        
+        // Limpiar opciones actuales
+        paymentTypeSelect.innerHTML = '<option value="">---------</option>';
+        
+        if (selectedMethod) {
+            // Hacer petición AJAX para obtener tipos de pago
+            fetch(`/finances/ajax/payment-types/?payment_method=${selectedMethod}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(paymentType => {
+                        const option = document.createElement('option');
+                        option.value = paymentType.id;
+                        option.textContent = paymentType.name;
+                        if (paymentType.is_default) {
+                            option.selected = true;
+                        }
+                        paymentTypeSelect.appendChild(option);
+                    });
+                });
+        }
+    }
+    
+    paymentMethodSelect.addEventListener('change', updatePaymentTypes);
+    
+    // Ejecutar al cargar la página si ya hay un método seleccionado
+    if (paymentMethodSelect.value) {
+        updatePaymentTypes();
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-sync-alt"></i> {{ title }}</h1>
+            <a href="{% url 'subscriptions:subscription_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-edit"></i> Información de la Suscripción</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.name.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.amount.id_for_label }}" class="form-label">{{ form.amount.label }}</label>
+                                {{ form.amount }}
+                                {% if form.amount.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.amount.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.category.id_for_label }}" class="form-label">{{ form.category.label }}</label>
+                                {{ form.category }}
+                                {% if form.category.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.category.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.frequency.id_for_label }}" class="form-label">{{ form.frequency.label }}</label>
+                                {{ form.frequency }}
+                                {% if form.frequency.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.frequency.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="{{ form.payment_method.id_for_label }}" class="form-label">{{ form.payment_method.label }}</label>
+                                {{ form.payment_method }}
+                                {% if form.payment_method.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.payment_method.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="{{ form.payment_type.id_for_label }}" class="form-label">{{ form.payment_type.label }}</label>
+                                {{ form.payment_type }}
+                                {% if form.payment_type.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.payment_type.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="{{ form.status.id_for_label }}" class="form-label">{{ form.status.label }}</label>
+                                {{ form.status }}
+                                {% if form.status.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.status.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.start_date.id_for_label }}" class="form-label">{{ form.start_date.label }}</label>
+                                {{ form.start_date }}
+                                {% if form.start_date.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.start_date.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.end_date.id_for_label }}" class="form-label">{{ form.end_date.label }}</label>
+                                {{ form.end_date }}
+                                <small class="form-text text-muted">Opcional - Dejar en blanco para suscripción indefinida</small>
+                                {% if form.end_date.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.end_date.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.reminder_days.id_for_label }}" class="form-label">{{ form.reminder_days.label }}</label>
+                                {{ form.reminder_days }}
+                                <small class="form-text text-muted">Días de anticipación para recordatorio</small>
+                                {% if form.reminder_days.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.reminder_days.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.auto_create_expense }}
+                                    <label class="form-check-label" for="{{ form.auto_create_expense.id_for_label }}">
+                                        {{ form.auto_create_expense.label }}
+                                    </label>
+                                    <small class="form-text text-muted">Crear gastos automáticamente</small>
+                                </div>
+                                {% if form.auto_create_expense.errors %}
+                                    <div class="text-danger">
+                                        {% for error in form.auto_create_expense.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">{{ form.description.label }}</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <div class="text-danger">
+                                {% for error in form.description.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'subscriptions:subscription_list' %}" class="btn btn-secondary me-md-2">Cancelar</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Guardar Suscripción
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const paymentMethodSelect = document.getElementById('id_payment_method');
+    const paymentTypeSelect = document.getElementById('id_payment_type');
+    
+    function updatePaymentTypes() {
+        const selectedMethod = paymentMethodSelect.value;
+        
+        // Limpiar opciones actuales
+        paymentTypeSelect.innerHTML = '<option value="">---------</option>';
+        
+        if (selectedMethod) {
+            // Hacer petición AJAX para obtener tipos de pago
+            fetch(`/finances/ajax/payment-types/?payment_method=${selectedMethod}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(paymentType => {
+                        const option = document.createElement('option');
+                        option.value = paymentType.id;
+                        option.textContent = paymentType.name;
+                        if (paymentType.is_default) {
+                            option.selected = true;
+                        }
+                        paymentTypeSelect.appendChild(option);
+                    });
+                });
+        }
+    }
+    
+    paymentMethodSelect.addEventListener('change', updatePaymentTypes);
+    
+    // Ejecutar al cargar la página si ya hay un método seleccionado
+    if (paymentMethodSelect.value) {
+        updatePaymentTypes();
+    }
+});
+</script>
+{% endblock %}

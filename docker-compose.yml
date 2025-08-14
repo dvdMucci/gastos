@@ -23,7 +23,7 @@ services:
     restart: always
     volumes:
       - ./web:/app  # Mapea tu código local para desarrollo en tiempo real
-    command: ["./wait-for-db.sh", "sh", "-c", "python manage.py makemigrations accounts && python manage.py makemigrations core && python manage.py makemigrations finances && python manage.py migrate && python manage.py populate_finances && python create_superuser.py && python bot.py & exec python manage.py runserver 0.0.0.0:8000"]
+    command: ["./wait-for-db.sh", "sh", "-c", "python manage.py makemigrations accounts && python manage.py makemigrations finances && python manage.py makemigrations subscriptions && python manage.py makemigrations forecasts && python manage.py migrate && python manage.py populate_finances && python create_superuser.py && python manage.py create_subscription_expenses && python bot.py & exec python manage.py runserver 0.0.0.0:8000"]
     ports:
       - "5800:8000"
     env_file:

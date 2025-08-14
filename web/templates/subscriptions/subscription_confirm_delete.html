@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}Eliminar Suscripción{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-trash"></i> Eliminar Suscripción</h1>
+            <a href="{% url 'subscriptions:subscription_detail' subscription.id %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5><i class="fas fa-exclamation-triangle"></i> Confirmar Eliminación</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <h6><i class="fas fa-info-circle"></i> ¿Estás seguro de que quieres eliminar esta suscripción?</h6>
+                    <p class="mb-0">Esta acción no se puede deshacer.</p>
+                </div>
+                
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6>Información de la Suscripción:</h6>
+                        <p><strong>Nombre:</strong> {{ subscription.name }}</p>
+                        <p><strong>Usuario:</strong> {{ subscription.user.username }}</p>
+                        <p><strong>Monto:</strong> ${{ subscription.amount|floatformat:2 }}</p>
+                        <p><strong>Frecuencia:</strong> {{ subscription.get_frequency_display }}</p>
+                        <p><strong>Estado:</strong> 
+                            {% if subscription.status == 'active' %}
+                                <span class="badge bg-success">Activa</span>
+                            {% elif subscription.status == 'paused' %}
+                                <span class="badge bg-warning">Pausada</span>
+                            {% else %}
+                                <span class="badge bg-danger">Cancelada</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>Próximo pago:</strong> {{ subscription.next_payment_date|date:"d/m/Y" }}</p>
+                    </div>
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'subscriptions:subscription_detail' subscription.id %}" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-times"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash"></i> Eliminar Definitivamente
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

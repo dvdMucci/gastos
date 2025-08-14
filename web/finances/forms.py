@@ -1,6 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
-from .models import Expense, Category, PaymentMethod
+from .models import Expense, Category, PaymentMethod, PaymentType
+from accounts.models import CustomUser
 
 class ExpenseForm(forms.ModelForm):
     """Formulario para crear/editar gastos"""
@@ -8,47 +9,51 @@ class ExpenseForm(forms.ModelForm):
     class Meta:
         model = Expense
         fields = [
-            'date', 'name', 'amount', 'category', 'payment_method', 
-            'payment_type', 'description', 'other_payment_method',
-            'is_credit', 'total_credit_amount', 'installments'
+            'name', 'amount', 'date', 'category', 'payment_method', 
+            'payment_type', 'description', 'is_credit', 'total_credit_amount', 'installments'
         ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
-            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nombre del gasto'}),
-            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'category': forms.Select(attrs={'class': 'form-control'}),
-            'payment_method': forms.Select(attrs={'class': 'form-control'}),
-            'payment_type': forms.Select(attrs={'class': 'form-control'}),
-            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Descripción opcional'}),
-            'other_payment_method': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Especificar método de pago'}),
-            'is_credit': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'total_credit_amount': forms.NumberInput(attrs={'class': 'form-control credit-field', 'step': '0.01', 'min': '0'}),
-            'installments': forms.NumberInput(attrs={'class': 'form-control credit-field', 'min': '1', 'max': '60'}),
+            'payment_method': forms.Select(attrs={'class': 'form-control', 'id': 'id_payment_method'}),
+            'payment_type': forms.Select(attrs={'class': 'form-control', 'id': 'id_payment_type', 'style': 'display: none;'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'is_credit': forms.HiddenInput(),
+            'total_credit_amount': forms.HiddenInput(),
+            'installments': forms.HiddenInput(),
         }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Hacer campos de crédito opcionales inicialmente
-        self.fields['total_credit_amount'].required = False
-        self.fields['installments'].required = False
+        # Ocultar campos de crédito inicialmente
+        self.fields['is_credit'].widget = forms.HiddenInput()
+        self.fields['total_credit_amount'].widget = forms.HiddenInput()
+        self.fields['installments'].widget = forms.HiddenInput()
         
-        # Agregar clases CSS para campos de crédito
-        if self.instance.pk and self.instance.is_credit:
-            self.fields['total_credit_amount'].widget.attrs['class'] += ' credit-field'
-            self.fields['installments'].widget.attrs['class'] += ' credit-field'
-    
+        # Configurar choices para payment_method
+        self.fields['payment_method'].choices = [
+            ('', 'Seleccione un método de pago'),
+            ('efectivo', 'EFECTIVO'),
+            ('debito', 'DEBITO'),
+            ('transferencia', 'TRANSFERENCIA'),
+            ('credito', 'CREDITO'),
+        ]
+
     def clean(self):
         cleaned_data = super().clean()
+        payment_method = cleaned_data.get('payment_method')
         payment_type = cleaned_data.get('payment_type')
         is_credit = cleaned_data.get('is_credit')
         amount = cleaned_data.get('amount')
         total_credit_amount = cleaned_data.get('total_credit_amount')
         installments = cleaned_data.get('installments')
-        other_payment_method = cleaned_data.get('other_payment_method')
         
-        # Validar método de pago "Otros"
-        if payment_type == 'other' and not other_payment_method:
-            raise ValidationError('Debe especificar el método de pago cuando selecciona "Otros"')
+        # Validar que el tipo de pago corresponda al método
+        if payment_method and payment_type:
+            if payment_type.payment_method != payment_method:
+                raise ValidationError('El tipo de pago seleccionado no corresponde al método de pago')
         
         # Validar campos de crédito
         if is_credit:
@@ -69,41 +74,81 @@ class ExpenseForm(forms.ModelForm):
         return cleaned_data
 
 class ExpenseFilterForm(forms.Form):
-    """Formulario para filtrar gastos"""
-    
     date_from = forms.DateField(
         required=False,
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        label='Desde'
     )
     date_to = forms.DateField(
         required=False,
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        label='Hasta'
     )
     category = forms.ModelChoiceField(
-        queryset=Category.objects.filter(is_active=True),
+        queryset=Category.objects.all(),
         required=False,
-        empty_label="Todas las categorías",
-        widget=forms.Select(attrs={'class': 'form-control'})
+        empty_label='Todas las categorías',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label='Categoría'
     )
-    payment_type = forms.ChoiceField(
-        choices=[('', 'Todos los tipos')] + Expense.PAYMENT_TYPES,
+    payment_method = forms.ModelChoiceField(
+        queryset=PaymentMethod.objects.all(),
         required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
+        empty_label='Todos los métodos',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label='Método de Pago'
+    )
+    payment_type = forms.ModelChoiceField(
+        queryset=PaymentType.objects.all(),
+        required=False,
+        empty_label='Todos los tipos',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label='Tipo de Pago'
+    )
+    user = forms.ModelChoiceField(
+        queryset=CustomUser.objects.all(),
+        required=False,
+        empty_label='Todos los usuarios',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label='Usuario'
     )
     is_credit = forms.ChoiceField(
-        choices=[('', 'Todos'), ('True', 'Solo crédito'), ('False', 'Sin crédito')],
+        choices=[
+            ('', 'Todos'),
+            ('True', 'Solo créditos'),
+            ('False', 'Solo contado')
+        ],
         required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label='Crédito'
     )
     min_amount = forms.DecimalField(
         required=False,
         min_value=0,
         decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Monto mínimo', 'step': '0.01'})
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'Monto mínimo'}),
+        label='Monto Mínimo'
     )
     max_amount = forms.DecimalField(
         required=False,
         min_value=0,
         decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Monto máximo', 'step': '0.01'})
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'Monto máximo'}),
+        label='Monto Máximo'
+    )
+    search = forms.CharField(
+        required=False,
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Buscar en nombre o descripción'}),
+        label='Buscar'
+    )
+    sort_order = forms.ChoiceField(
+        choices=[
+            ('newest', 'Más recientes primero'),
+            ('oldest', 'Más antiguos primero')
+        ],
+        required=False,
+        initial='newest',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label='Orden'
     )

@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Generar Estimaciones{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0">
+                        <i class="fas fa-sync-alt"></i> Generar Estimaciones Manualmente
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>¿Qué hace esta función?</strong>
+                        <br>
+                        Regenera todas las estimaciones mensuales basándose en suscripciones activas, 
+                        créditos pendientes y estimaciones activas. Esto es útil después de hacer cambios 
+                        importantes en el sistema.
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="months_back" class="form-label">Meses hacia atrás</label>
+                                    <select name="months_back" id="months_back" class="form-control">
+                                        <option value="3">3 meses</option>
+                                        <option value="6" selected>6 meses (recomendado)</option>
+                                        <option value="12">12 meses</option>
+                                    </select>
+                                    <div class="form-text">
+                                        Incluir datos históricos para comparación.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="months_forward" class="form-label">Meses hacia adelante</label>
+                                    <select name="months_forward" id="months_forward" class="form-control">
+                                        <option value="6">6 meses</option>
+                                        <option value="12" selected>12 meses (recomendado)</option>
+                                        <option value="24">24 meses</option>
+                                    </select>
+                                    <div class="form-text">
+                                        Proyecciones futuras basadas en datos actuales.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'forecasts:forecast_dashboard' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Volver
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-sync-alt"></i> Generar Estimaciones
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

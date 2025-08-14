@@ -3,6 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import datetime, timedelta
 import calendar
+from accounts.models import CustomUser
 
 class Category(models.Model):
     """Categorías de gastos predefinidas"""
@@ -21,59 +22,98 @@ class Category(models.Model):
 
 class PaymentMethod(models.Model):
     """Métodos de pago disponibles"""
-    name = models.CharField(max_length=50, verbose_name="Nombre")
+    PAYMENT_METHODS = [
+        ('efectivo', 'EFECTIVO'),
+        ('debito', 'DEBITO'),
+        ('transferencia', 'TRANSFERENCIA'),
+        ('credito', 'CREDITO'),
+    ]
+    
+    name = models.CharField(max_length=20, choices=PAYMENT_METHODS, unique=True, verbose_name="Método de Pago")
     icon = models.CharField(max_length=50, default="fas fa-credit-card", verbose_name="Icono")
     
     class Meta:
         verbose_name = "Método de Pago"
         verbose_name_plural = "Métodos de Pago"
+        ordering = ['name']
     
     def __str__(self):
-        return self.name
+        return self.get_name_display()
+
+class PaymentType(models.Model):
+    """Tipos de pago específicos para cada método"""
+    PAYMENT_TYPES = [
+        # Para EFECTIVO
+        ('efectivo', 'EFECTIVO'),
+        
+        # Para DEBITO
+        ('mercado_pago', 'MERCADO PAGO'),
+        ('visa_frances', 'VISA FRANCES'),
+        ('visa_bapro', 'VISA BAPRO'),
+        ('visa_macro', 'VISA MACRO'),
+        ('cuenta_dni', 'CUENTA DNI'),
+        
+        # Para TRANSFERENCIA
+        ('transferencia_mp', 'MERCADO PAGO'),
+        ('transferencia_frances', 'FRANCES'),
+        ('transferencia_macro', 'MACRO'),
+        ('transferencia_bapro', 'BAPRO'),
+        ('transferencia_cuenta_dni', 'CUENTA DNI'),
+        
+        # Para CREDITO
+        ('mastercard_frances', 'MASTERCARD FRANCES'),
+        ('visa_frances_credito', 'VISA FRANCES'),
+        ('visa_bapro_credito', 'VISA BAPRO'),
+        ('mercado_pago_credito', 'MERCADO PAGO'),
+    ]
+    
+    name = models.CharField(max_length=50, choices=PAYMENT_TYPES, unique=True, verbose_name="Tipo de Pago")
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE, verbose_name="Método de Pago")
+    is_default = models.BooleanField(default=False, verbose_name="Es por defecto")
+    
+    class Meta:
+        verbose_name = "Tipo de Pago"
+        verbose_name_plural = "Tipos de Pago"
+        ordering = ['payment_method', 'name']
+    
+    def __str__(self):
+        return self.get_name_display()
 
 class Expense(models.Model):
     """Modelo principal para gastos"""
-    PAYMENT_TYPES = [
-        ('cash', 'Efectivo'),
-        ('debit', 'Débito'),
-        ('credit', 'Crédito'),
-        ('other', 'Otros'),
-    ]
     
     # Campos básicos
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="Usuario")
-    date = models.DateField(default=timezone.now, verbose_name="Fecha")
-    name = models.CharField(max_length=200, verbose_name="Nombre del gasto")
-    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Monto")
-    category = models.ForeignKey(Category, on_delete=models.PROTECT, verbose_name="Categoría")
-    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT, verbose_name="Método de pago")
-    payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPES, verbose_name="Tipo de pago")
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, verbose_name='Usuario')
+    date = models.DateField(verbose_name='Fecha')
+    name = models.CharField(max_length=200, verbose_name='Nombre del Gasto')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Monto')
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name='Categoría')
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE, verbose_name='Método de Pago')
+    payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE, verbose_name='Tipo de Pago')
+    description = models.TextField(blank=True, null=True, verbose_name='Descripción')
     
-    # Campos para crédito
-    is_credit = models.BooleanField(default=False, verbose_name="Es crédito")
-    total_credit_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Monto total del crédito")
-    installments = models.PositiveIntegerField(default=1, verbose_name="Número de cuotas")
-    current_installment = models.PositiveIntegerField(default=1, verbose_name="Cuota actual")
-    remaining_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Monto restante")
+    # Campos para créditos
+    is_credit = models.BooleanField(default=False, verbose_name='Es un gasto a crédito')
+    total_credit_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name='Monto total del crédito')
+    installments = models.PositiveIntegerField(null=True, blank=True, verbose_name='Número de cuotas')
+    current_installment = models.PositiveIntegerField(null=True, blank=True, verbose_name='Cuota actual')
+    remaining_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name='Monto restante')
+    credit_group_id = models.CharField(max_length=100, null=True, blank=True, verbose_name='ID del grupo de crédito')
     
-    # Campos adicionales
-    description = models.TextField(blank=True, null=True, verbose_name="Descripción")
-    other_payment_method = models.CharField(max_length=100, blank=True, null=True, verbose_name="Otro método de pago")
+    # Campo para suscripciones
+    subscription = models.ForeignKey('subscriptions.Subscription', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Suscripción')
     
-    # Campos de auditoría
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Fecha de actualización")
-    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Última actualización')
+
     class Meta:
-        verbose_name = "Gasto"
-        verbose_name_plural = "Gastos"
+        verbose_name = 'Gasto'
+        verbose_name_plural = 'Gastos'
         ordering = ['-date', '-created_at']
-    
+
     def __str__(self):
-        if self.is_credit:
-            return f"{self.name} - Cuota {self.current_installment}/{self.installments}"
-        return f"{self.name} - ${self.amount}"
-    
+        return f"{self.name} - ${self.amount} ({self.date})"
+
     def save(self, *args, **kwargs):
         # Si es crédito, calcular el monto restante
         if self.is_credit and self.total_credit_amount:
@@ -112,6 +152,12 @@ class Expense(models.Model):
             
             return datetime(next_year, next_month, 1).date()
         return None
+    
+    def get_related_credit_expenses(self):
+        """Obtener gastos de crédito relacionados"""
+        if self.credit_group_id:
+            return Expense.objects.filter(credit_group_id=self.credit_group_id).exclude(pk=self.pk).order_by('current_installment')
+        return Expense.objects.none()
 
 class MonthlySummary(models.Model):
     """Resumen mensual de gastos por usuario"""

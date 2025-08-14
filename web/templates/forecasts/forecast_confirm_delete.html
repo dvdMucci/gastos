@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Eliminar Gasto{% endblock %}
+{% block title %}Eliminar Estimación{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -15,26 +15,31 @@
                 </div>
                 <div class="card-body">
                     <div class="alert alert-warning">
-                        <h5>¿Estás seguro de que quieres eliminar este gasto?</h5>
+                        <h5>¿Estás seguro de que quieres eliminar esta estimación?</h5>
                         <p class="mb-0">Esta acción no se puede deshacer.</p>
                     </div>
                     
-                    <div class="expense-info mb-4">
-                        <h6>Información del Gasto:</h6>
+                    <div class="forecast-info mb-4">
+                        <h6>Información de la Estimación:</h6>
                         <ul class="list-unstyled">
-                            <li><strong>Nombre:</strong> {{ expense.name }}</li>
-                            <li><strong>Monto:</strong> ${{ expense.amount|floatformat:2 }}</li>
-                            <li><strong>Fecha:</strong> {{ expense.date|date:"d/m/Y" }}</li>
-                            <li><strong>Categoría:</strong> {{ expense.category.name }}</li>
-                            <li><strong>Usuario:</strong> {{ expense.user.username }}</li>
+                            <li><strong>Nombre:</strong> {{ forecast.name }}</li>
+                            <li><strong>Monto:</strong> ${{ forecast.amount|floatformat:2 }}</li>
+                            <li><strong>Categoría:</strong> {{ forecast.category.name }}</li>
+                            <li><strong>Frecuencia:</strong> {{ forecast.get_frequency_display }}</li>
+                            <li><strong>Estado:</strong> 
+                                {% if forecast.is_active %}
+                                    <span class="badge bg-success">Activa</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactiva</span>
+                                {% endif %}
+                            </li>
                         </ul>
                         
-                        {% if expense.is_credit %}
+                        {% if forecast.is_automatic_suggestion %}
                         <div class="alert alert-info">
-                            <i class="fas fa-credit-card"></i>
-                            <strong>Gasto a Crédito:</strong> 
-                            Este gasto tiene {{ expense.installments }} cuotas. 
-                            Al eliminarlo, se eliminarán todas las cuotas relacionadas.
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>Sugerencia Automática:</strong> 
+                            Esta estimación fue generada automáticamente por el sistema.
                         </div>
                         {% endif %}
                     </div>
@@ -42,7 +47,7 @@
                     <form method="post">
                         {% csrf_token %}
                         <div class="d-flex justify-content-between">
-                            <a href="{% url 'finances:expense_list' %}" class="btn btn-secondary">
+                            <a href="{% url 'forecasts:forecast_dashboard' %}" class="btn btn-secondary">
                                 <i class="fas fa-arrow-left"></i> Cancelar
                             </a>
                             <button type="submit" class="btn btn-danger">

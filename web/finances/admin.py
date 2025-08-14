@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, PaymentMethod, Expense, MonthlySummary
+from .models import Category, PaymentMethod, PaymentType, Expense, MonthlySummary
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -17,10 +17,17 @@ class PaymentMethodAdmin(admin.ModelAdmin):
     search_fields = ['name']
     ordering = ['name']
 
+@admin.register(PaymentType)
+class PaymentTypeAdmin(admin.ModelAdmin):
+    list_display = ['name', 'payment_method', 'is_default']
+    list_filter = ['payment_method', 'is_default']
+    search_fields = ['name']
+    ordering = ['payment_method', 'name']
+
 @admin.register(Expense)
 class ExpenseAdmin(admin.ModelAdmin):
-    list_display = ['name', 'user', 'date', 'amount', 'category', 'payment_type', 'is_credit', 'installments']
-    list_filter = ['date', 'category', 'payment_type', 'is_credit', 'user']
+    list_display = ['name', 'user', 'date', 'amount', 'category', 'payment_method', 'payment_type', 'is_credit', 'installments']
+    list_filter = ['date', 'category', 'payment_method', 'payment_type', 'is_credit', 'user']
     search_fields = ['name', 'description', 'user__username']
     date_hierarchy = 'date'
     ordering = ['-date', '-created_at']
@@ -30,10 +37,10 @@ class ExpenseAdmin(admin.ModelAdmin):
             'fields': ('user', 'date', 'name', 'amount', 'category', 'description')
         }),
         ('Pago', {
-            'fields': ('payment_method', 'payment_type', 'other_payment_method')
+            'fields': ('payment_method', 'payment_type')
         }),
         ('Crédito', {
-            'fields': ('is_credit', 'total_credit_amount', 'installments', 'current_installment', 'remaining_amount'),
+            'fields': ('is_credit', 'total_credit_amount', 'installments', 'current_installment', 'remaining_amount', 'credit_group_id'),
             'classes': ('collapse',)
         }),
         ('Auditoría', {

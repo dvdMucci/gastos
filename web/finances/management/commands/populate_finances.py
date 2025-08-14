@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from finances.models import Category, PaymentMethod
+from finances.models import Category, PaymentMethod, PaymentType
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -84,14 +84,10 @@ class Command(BaseCommand):
         
         # Métodos de pago
         payment_methods_data = [
-            {'name': 'Efectivo', 'icon': 'fas fa-money-bill-wave'},
-            {'name': 'Débito', 'icon': 'fas fa-credit-card'},
-            {'name': 'Crédito', 'icon': 'fas fa-credit-card'},
-            {'name': 'Transferencia', 'icon': 'fas fa-exchange-alt'},
-            {'name': 'Mercado Pago', 'icon': 'fab fa-cc-mastercard'},
-            {'name': 'Ualá', 'icon': 'fas fa-mobile-alt'},
-            {'name': 'Lemon', 'icon': 'fas fa-lemon'},
-            {'name': 'Otros', 'icon': 'fas fa-ellipsis-h'},
+            {'name': 'efectivo', 'icon': 'fas fa-money-bill-wave'},
+            {'name': 'debito', 'icon': 'fas fa-credit-card'},
+            {'name': 'transferencia', 'icon': 'fas fa-exchange-alt'},
+            {'name': 'credito', 'icon': 'fas fa-credit-card'},
         ]
         
         for pm_data in payment_methods_data:
@@ -100,12 +96,54 @@ class Command(BaseCommand):
                 defaults={'icon': pm_data['icon']}
             )
             if created:
-                self.stdout.write(f'  ✓ Método de pago creado: {payment_method.name}')
+                self.stdout.write(f'  ✓ Método de pago creado: {payment_method.get_name_display()}')
             else:
-                self.stdout.write(f'  - Método de pago ya existe: {payment_method.name}')
+                self.stdout.write(f'  - Método de pago ya existe: {payment_method.get_name_display()}')
+        
+        self.stdout.write('Poblando tipos de pago...')
+        
+        # Tipos de pago para cada método
+        payment_types_data = [
+            # EFECTIVO
+            {'name': 'efectivo', 'payment_method': 'efectivo', 'is_default': True},
+            
+            # DEBITO
+            {'name': 'mercado_pago', 'payment_method': 'debito', 'is_default': True},
+            {'name': 'visa_frances', 'payment_method': 'debito', 'is_default': False},
+            {'name': 'visa_bapro', 'payment_method': 'debito', 'is_default': False},
+            {'name': 'visa_macro', 'payment_method': 'debito', 'is_default': False},
+            {'name': 'cuenta_dni', 'payment_method': 'debito', 'is_default': False},
+            
+            # TRANSFERENCIA
+            {'name': 'transferencia_mp', 'payment_method': 'transferencia', 'is_default': True},
+            {'name': 'transferencia_frances', 'payment_method': 'transferencia', 'is_default': False},
+            {'name': 'transferencia_macro', 'payment_method': 'transferencia', 'is_default': False},
+            {'name': 'transferencia_bapro', 'payment_method': 'transferencia', 'is_default': False},
+            {'name': 'transferencia_cuenta_dni', 'payment_method': 'transferencia', 'is_default': False},
+            
+            # CREDITO
+            {'name': 'mastercard_frances', 'payment_method': 'credito', 'is_default': True},
+            {'name': 'visa_frances_credito', 'payment_method': 'credito', 'is_default': False},
+            {'name': 'visa_bapro_credito', 'payment_method': 'credito', 'is_default': False},
+            {'name': 'mercado_pago_credito', 'payment_method': 'credito', 'is_default': False},
+        ]
+        
+        for pt_data in payment_types_data:
+            payment_method = PaymentMethod.objects.get(name=pt_data['payment_method'])
+            payment_type, created = PaymentType.objects.get_or_create(
+                name=pt_data['name'],
+                defaults={
+                    'payment_method': payment_method,
+                    'is_default': pt_data['is_default']
+                }
+            )
+            if created:
+                self.stdout.write(f'  ✓ Tipo de pago creado: {payment_type.get_name_display()} ({payment_method.get_name_display()})')
+            else:
+                self.stdout.write(f'  - Tipo de pago ya existe: {payment_type.get_name_display()}')
         
         self.stdout.write(
             self.style.SUCCESS(
-                f'✅ Completado! Se crearon {Category.objects.count()} categorías y {PaymentMethod.objects.count()} métodos de pago.'
+                f'✅ Completado! Se crearon {Category.objects.count()} categorías, {PaymentMethod.objects.count()} métodos de pago y {PaymentType.objects.count()} tipos de pago.'
             )
         )

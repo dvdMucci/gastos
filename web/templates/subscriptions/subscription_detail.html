@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+
+{% block title %}Detalle de Suscripción{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-sync-alt"></i> {{ subscription.name }}</h1>
+            <div>
+                <a href="{% url 'subscriptions:subscription_edit' subscription.id %}" class="btn btn-warning me-2">
+                    <i class="fas fa-edit"></i> Editar
+                </a>
+                <a href="{% url 'subscriptions:subscription_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Volver
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> Información General</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Nombre:</strong> {{ subscription.name }}</p>
+                        <p><strong>Usuario:</strong> {{ subscription.user.username }}</p>
+                        <p><strong>Monto:</strong> <span class="badge bg-success">${{ subscription.amount|floatformat:2 }}</span></p>
+                        <p><strong>Frecuencia:</strong> <span class="badge bg-secondary">{{ subscription.get_frequency_display }}</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Estado:</strong> 
+                            {% if subscription.status == 'active' %}
+                                <span class="badge bg-success">Activa</span>
+                            {% elif subscription.status == 'paused' %}
+                                <span class="badge bg-warning">Pausada</span>
+                            {% else %}
+                                <span class="badge bg-danger">Cancelada</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>Fecha de inicio:</strong> {{ subscription.start_date|date:"d/m/Y" }}</p>
+                        <p><strong>Próximo pago:</strong> 
+                            {% if subscription.is_overdue %}
+                                <span class="badge bg-danger">{{ subscription.next_payment_date|date:"d/m/Y" }}</span>
+                            {% elif subscription.is_due_soon %}
+                                <span class="badge bg-warning">{{ subscription.next_payment_date|date:"d/m/Y" }}</span>
+                            {% else %}
+                                <span class="badge bg-info">{{ subscription.next_payment_date|date:"d/m/Y" }}</span>
+                            {% endif %}
+                        </p>
+                        {% if subscription.end_date %}
+                            <p><strong>Fecha de finalización:</strong> {{ subscription.end_date|date:"d/m/Y" }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if subscription.description %}
+                    <hr>
+                    <p><strong>Descripción:</strong></p>
+                    <p>{{ subscription.description }}</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-credit-card"></i> Información de Pago</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <p><strong>Categoría:</strong> {{ subscription.category.name }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Método de pago:</strong> {{ subscription.payment_method.get_name_display }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Tipo de pago:</strong> {{ subscription.payment_type.get_name_display }}</p>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Crear gasto automáticamente:</strong> 
+                            {% if subscription.auto_create_expense %}
+                                <span class="badge bg-success">Sí</span>
+                            {% else %}
+                                <span class="badge bg-danger">No</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Recordatorio:</strong> {{ subscription.reminder_days }} días antes</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-pie"></i> Estadísticas</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Total pagado:</strong> <span class="badge bg-success">${{ subscription.get_total_paid|floatformat:2 }}</span></p>
+                
+                {% if subscription.get_remaining_payments is not None %}
+                    <p><strong>Pagos restantes:</strong> <span class="badge bg-info">{{ subscription.get_remaining_payments }}</span></p>
+                {% endif %}
+                
+                {% if subscription.is_overdue %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Esta suscripción está vencida
+                    </div>
+                {% elif subscription.is_due_soon %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-clock"></i> Esta suscripción vence pronto
+                    </div>
+                {% else %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i> Esta suscripción está al día
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-cogs"></i> Acciones</h5>
+            </div>
+            <div class="card-body">
+                {% if subscription.status == 'active' %}
+                    <form method="post" action="{% url 'subscriptions:subscription_advance' subscription.id %}" class="mb-2">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success btn-sm w-100">
+                            <i class="fas fa-forward"></i> Avanzar al Siguiente Período
+                        </button>
+                    </form>
+                    
+                    <form method="post" action="{% url 'subscriptions:subscription_toggle_status' subscription.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-warning btn-sm w-100">
+                            <i class="fas fa-pause"></i> Pausar Suscripción
+                        </button>
+                    </form>
+                {% elif subscription.status == 'paused' %}
+                    <form method="post" action="{% url 'subscriptions:subscription_toggle_status' subscription.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success btn-sm w-100">
+                            <i class="fas fa-play"></i> Activar Suscripción
+                        </button>
+                    </form>
+                {% endif %}
+                
+                <hr>
+                
+                <a href="{% url 'subscriptions:subscription_delete' subscription.id %}" class="btn btn-danger btn-sm w-100">
+                    <i class="fas fa-trash"></i> Eliminar Suscripción
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

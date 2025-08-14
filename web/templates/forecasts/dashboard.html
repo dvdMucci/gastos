@@ -1,0 +1,348 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard de Estimaciones{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1><i class="fas fa-chart-line"></i> Dashboard de Estimaciones</h1>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'forecasts:generate_forecasts' %}" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> Generar Estimaciones
+                    </a>
+                    <a href="{% url 'forecasts:expense_forecast_create' %}" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Nueva Estimación
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros del gráfico -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros del Gráfico</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="show-subscriptions" checked>
+                        <label class="form-check-label" for="show-subscriptions">
+                            <i class="fas fa-sync-alt"></i> Suscripciones
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="show-credits" checked>
+                        <label class="form-check-label" for="show-credits">
+                            <i class="fas fa-credit-card"></i> Créditos
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="show-estimates" checked>
+                        <label class="form-check-label" for="show-estimates">
+                            <i class="fas fa-chart-bar"></i> Estimaciones Activas
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="show-other" checked>
+                        <label class="form-check-label" for="show-other">
+                            <i class="fas fa-receipt"></i> Otros Gastos
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumen general -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Total Estimado (12 meses)</h6>
+                            <h3 class="mb-0">${{ total_projected|floatformat:2 }}</h3>
+                        </div>
+                        <div>
+                            <i class="fas fa-chart-line fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Suscripciones</h6>
+                            <h3 class="mb-0">${{ total_subscriptions|floatformat:2 }}</h3>
+                        </div>
+                        <div>
+                            <i class="fas fa-sync-alt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Créditos</h6>
+                            <h3 class="mb-0">${{ total_credits|floatformat:2 }}</h3>
+                        </div>
+                        <div>
+                            <i class="fas fa-credit-card fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Estimaciones</h6>
+                            <h3 class="mb-0">${{ total_estimates|floatformat:2 }}</h3>
+                        </div>
+                        <div>
+                            <i class="fas fa-chart-bar fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico principal -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Proyección de Gastos (6 meses atrás + 12 meses adelante)</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="forecastChart" width="400" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- Sugerencias automáticas -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-lightbulb"></i> Sugerencias Automáticas</h5>
+        </div>
+        <div class="card-body">
+            {% if automatic_suggestions %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Se encontraron {{ automatic_suggestions|length }} sugerencias automáticas</strong> 
+                    basadas en tus gastos de los últimos 6 meses (excluyendo créditos y suscripciones).
+                </div>
+                <div class="row">
+                    {% for suggestion in automatic_suggestions %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-info">
+                            <div class="card-body">
+                                <h6 class="card-title">{{ suggestion.name }}</h6>
+                                <p class="card-text">
+                                    <strong>Categoría:</strong> {{ suggestion.category.name }}<br>
+                                    <strong>Monto:</strong> ${{ suggestion.amount|floatformat:2 }}<br>
+                                    <strong>Confianza:</strong> 
+                                    <span class="badge bg-{% if suggestion.confidence == 'high' %}success{% elif suggestion.confidence == 'medium' %}warning{% else %}secondary{% endif %}">
+                                        {{ suggestion.get_confidence_display }}
+                                    </span>
+                                </p>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-success activate-suggestion" data-id="{{ suggestion.pk }}">
+                                        <i class="fas fa-check"></i> Activar
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary edit-suggestion" data-id="{{ suggestion.pk }}">
+                                        <i class="fas fa-edit"></i> Editar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-lightbulb fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No hay sugerencias automáticas disponibles.</p>
+                    <p class="text-muted">Las sugerencias se generan basándose en tus gastos históricos.</p>
+                    <a href="{% url 'forecasts:generate_suggestions' %}" class="btn btn-primary">
+                        <i class="fas fa-magic"></i> Generar Sugerencias
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Enlaces rápidos -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-list"></i> Acciones Rápidas</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'forecasts:expense_forecast_list' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-list"></i> Ver Todas las Estimaciones
+                        </a>
+                        <a href="{% url 'forecasts:monthly_forecasts' %}" class="btn btn-outline-info">
+                            <i class="fas fa-calendar-alt"></i> Vista Mensual Detallada
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-cog"></i> Configuración</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'subscriptions:subscription_list' %}" class="btn btn-outline-success">
+                            <i class="fas fa-sync-alt"></i> Gestionar Suscripciones
+                        </a>
+                        <a href="{% url 'finances:expense_list' %}" class="btn btn-outline-warning">
+                            <i class="fas fa-receipt"></i> Ver Gastos Reales
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Datos del gráfico
+    const chartData = {
+        labels: {{ chart_labels|safe }},
+        datasets: [
+            {
+                label: 'Suscripciones',
+                data: {{ subscriptions_data|safe }},
+                backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                borderColor: 'rgba(40, 167, 69, 1)',
+                borderWidth: 2,
+                hidden: false
+            },
+            {
+                label: 'Créditos',
+                data: {{ credits_data|safe }},
+                backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                borderColor: 'rgba(255, 193, 7, 1)',
+                borderWidth: 2,
+                hidden: false
+            },
+            {
+                label: 'Estimaciones Activas',
+                data: {{ estimates_data|safe }},
+                backgroundColor: 'rgba(23, 162, 184, 0.8)',
+                borderColor: 'rgba(23, 162, 184, 1)',
+                borderWidth: 2,
+                hidden: false
+            },
+            {
+                label: 'Otros Gastos',
+                data: {{ other_data|safe }},
+                backgroundColor: 'rgba(108, 117, 125, 0.8)',
+                borderColor: 'rgba(108, 117, 125, 1)',
+                borderWidth: 2,
+                hidden: false
+            }
+        ]
+    };
+
+    // Crear gráfico
+    const ctx = document.getElementById('forecastChart').getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'bar',
+        data: chartData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString();
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': $' + context.parsed.y.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Filtros del gráfico
+    document.getElementById('show-subscriptions').addEventListener('change', function() {
+        chart.getDatasetMeta(0).hidden = !this.checked;
+        chart.update();
+    });
+
+    document.getElementById('show-credits').addEventListener('change', function() {
+        chart.getDatasetMeta(1).hidden = !this.checked;
+        chart.update();
+    });
+
+    document.getElementById('show-estimates').addEventListener('change', function() {
+        chart.getDatasetMeta(2).hidden = !this.checked;
+        chart.update();
+    });
+
+    document.getElementById('show-other').addEventListener('change', function() {
+        chart.getDatasetMeta(3).hidden = !this.checked;
+        chart.update();
+    });
+
+    // Activar sugerencias automáticas
+    document.querySelectorAll('.activate-suggestion').forEach(button => {
+        button.addEventListener('click', function() {
+            const suggestionId = this.dataset.id;
+            fetch(`/forecasts/${suggestionId}/activate/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error al activar la sugerencia');
+                }
+            });
+        });
+    });
+});
+</script>
+{% endblock %}
