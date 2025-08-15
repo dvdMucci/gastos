@@ -84,3 +84,13 @@ class ForecastFilterForm(forms.Form):
         decimal_places=2,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Monto máximo', 'step': '0.01'})
     )
+    expense_type = forms.ChoiceField(
+        choices=[('', 'Todos los tipos')] + ExpenseForecast.EXPENSE_TYPE_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    is_active = forms.ChoiceField(
+        choices=[('', 'Todos los estados'), (True, 'Activas'), (False, 'Inactivas')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )

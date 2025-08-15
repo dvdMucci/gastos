@@ -86,7 +86,12 @@
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="{{ form.date.id_for_label }}" class="form-label">Fecha *</label>
-                                    {{ form.date }}
+                                    <div class="input-group">
+                                        {{ form.date }}
+                                        <button type="button" class="btn btn-outline-secondary" id="today-btn" title="Establecer fecha de hoy">
+                                            <i class="fas fa-calendar-day"></i> Hoy
+                                        </button>
+                                    </div>
                                     {% if form.date.errors %}
                                         <div class="text-danger">{{ form.date.errors }}</div>
                                     {% endif %}
@@ -129,20 +134,29 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="{{ form.total_credit_amount.id_for_label }}" class="form-label">Monto Total del Crédito *</label>
-                                        <input type="number" name="total_credit_amount" class="form-control" step="0.01" id="id_total_credit_amount">
-                                        {% if form.total_credit_amount.errors %}
-                                            <div class="text-danger">{{ form.total_credit_amount.errors }}</div>
+                                        <label for="id_installments" class="form-label">Número de Cuotas *</label>
+                                        <input type="number" name="installments" class="form-control" min="1" max="60" id="id_installments" 
+                                               value="{% if form.instance.pk and form.instance.installments %}{{ form.instance.installments }}{% else %}1{% endif %}">
+                                        {% if form.installments.errors %}
+                                            <div class="text-danger">{{ form.installments.errors }}</div>
                                         {% endif %}
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="{{ form.installments.id_for_label }}" class="form-label">Número de Cuotas *</label>
-                                        <input type="number" name="installments" class="form-control" min="1" max="60" id="id_installments">
-                                        {% if form.installments.errors %}
-                                            <div class="text-danger">{{ form.installments.errors }}</div>
-                                        {% endif %}
+                                        <label for="id_installment_amount" class="form-label">Valor de Cuota Mensual</label>
+                                        <input type="number" class="form-control" id="id_installment_amount" readonly>
+                                        <small class="form-text text-muted">Se calcula automáticamente: Monto Total ÷ Número de Cuotas</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="mb-3">
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle"></i>
+                                            <strong>Información:</strong> Se creará un registro inicial con cuota 0 y monto 0, seguido de registros mensuales con el valor de cuota calculado.
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -158,8 +172,8 @@
 
                         <!-- Campos ocultos para crédito -->
                         {{ form.is_credit }}
-                        {{ form.total_credit_amount }}
-                        {{ form.installments }}
+                        <input type="hidden" name="total_credit_amount" id="id_total_credit_amount" 
+                               value="{% if form.instance.pk and form.instance.total_credit_amount %}{{ form.instance.total_credit_amount }}{% endif %}">
 
                         <div class="d-flex justify-content-between">
                             <a href="{% url 'finances:expense_list' %}" class="btn btn-secondary">
@@ -183,19 +197,42 @@ document.addEventListener('DOMContentLoaded', function() {
     const paymentTypeSelect = document.getElementById('id_payment_type');
     const creditFields = document.getElementById('credit-fields');
     const isCreditField = document.getElementById('id_is_credit');
-    const totalCreditAmountField = document.getElementById('id_total_credit_amount');
     const installmentsField = document.getElementById('id_installments');
+    const installmentAmountField = document.getElementById('id_installment_amount');
+    const amountField = document.getElementById('id_amount');
+    const todayBtn = document.getElementById('today-btn');
+
+    // Función para establecer la fecha de hoy
+    function setTodayDate() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const dateInput = document.getElementById('id_date');
+        dateInput.value = `${year}-${month}-${day}`;
+        
+        // Agregar efecto visual
+        todayBtn.classList.add('btn-success');
+        todayBtn.classList.remove('btn-outline-secondary');
+        setTimeout(() => {
+            todayBtn.classList.remove('btn-success');
+            todayBtn.classList.add('btn-outline-secondary');
+        }, 1000);
+    }
+
+    // Event listener para el botón Hoy
+    todayBtn.addEventListener('click', setTodayDate);
 
     // Función para cargar tipos de pago
-    function loadPaymentTypes(paymentMethod) {
+    function loadPaymentTypes(paymentMethodId) {
         paymentTypeSelect.innerHTML = '<option value="">Cargando...</option>';
         
-        fetch(`/finances/get-payment-types/?payment_method=${paymentMethod}`)
+        fetch(`/finances/get-payment-types/?payment_method=${paymentMethodId}`)
             .then(response => response.json())
             .then(data => {
                 paymentTypeSelect.innerHTML = '<option value="">Seleccione un tipo de pago</option>';
                 
-                data.payment_types.forEach(type => {
+                data.forEach(type => {
                     const option = document.createElement('option');
                     option.value = type.id;
                     option.textContent = type.name;
@@ -207,6 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Mostrar el campo de tipo de pago
                 paymentTypeSelect.style.display = 'block';
+                paymentTypeSelect.required = true;
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -214,17 +252,39 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    // Función para calcular el valor de cuota mensual
+    function calculateInstallmentAmount() {
+        const amount = parseFloat(amountField.value) || 0;
+        const installments = parseInt(installmentsField.value) || 1;
+        
+        if (amount > 0 && installments > 0) {
+            const installmentAmount = amount / installments;
+            installmentAmountField.value = installmentAmount.toFixed(2);
+            
+            // Establecer el monto total del crédito
+            document.getElementById('id_total_credit_amount').value = amount;
+        } else {
+            installmentAmountField.value = '0.00';
+            document.getElementById('id_total_credit_amount').value = '';
+        }
+    }
+
     // Función para manejar campos de crédito
-    function handleCreditFields(paymentMethod) {
-        if (paymentMethod === 'credito') {
+    function handleCreditFields(paymentMethodId) {
+        // Obtener el nombre del método de pago por ID
+        const selectedOption = paymentMethodSelect.options[paymentMethodSelect.selectedIndex];
+        const methodName = selectedOption.textContent.toLowerCase();
+        
+        if (methodName === 'credito') {
             creditFields.style.display = 'block';
             isCreditField.value = 'true';
-            totalCreditAmountField.required = true;
             installmentsField.required = true;
+            
+            // Calcular valor de cuota inicial
+            calculateInstallmentAmount();
         } else {
             creditFields.style.display = 'none';
             isCreditField.value = 'false';
-            totalCreditAmountField.required = false;
             installmentsField.required = false;
         }
     }
@@ -238,7 +298,21 @@ document.addEventListener('DOMContentLoaded', function() {
             handleCreditFields(selectedMethod);
         } else {
             paymentTypeSelect.style.display = 'none';
+            paymentTypeSelect.required = false;
             creditFields.style.display = 'none';
+        }
+    });
+
+    // Event listeners para campos de crédito
+    amountField.addEventListener('input', function() {
+        if (creditFields.style.display !== 'none') {
+            calculateInstallmentAmount();
+        }
+    });
+
+    installmentsField.addEventListener('input', function() {
+        if (creditFields.style.display !== 'none') {
+            calculateInstallmentAmount();
         }
     });
 
@@ -246,6 +320,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (paymentMethodSelect.value) {
         loadPaymentTypes(paymentMethodSelect.value);
         handleCreditFields(paymentMethodSelect.value);
+    }
+
+    // Establecer fecha de hoy por defecto si no hay fecha seleccionada
+    const dateInput = document.getElementById('id_date');
+    if (!dateInput.value) {
+        setTodayDate();
     }
 });
 </script>

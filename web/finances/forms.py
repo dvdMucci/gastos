@@ -10,7 +10,7 @@ class ExpenseForm(forms.ModelForm):
         model = Expense
         fields = [
             'name', 'amount', 'date', 'category', 'payment_method', 
-            'payment_type', 'description', 'is_credit', 'total_credit_amount', 'installments'
+            'payment_type', 'description', 'is_credit'
         ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
@@ -21,33 +21,33 @@ class ExpenseForm(forms.ModelForm):
             'payment_type': forms.Select(attrs={'class': 'form-control', 'id': 'id_payment_type', 'style': 'display: none;'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'is_credit': forms.HiddenInput(),
-            'total_credit_amount': forms.HiddenInput(),
-            'installments': forms.HiddenInput(),
         }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Ocultar campos de crédito inicialmente
         self.fields['is_credit'].widget = forms.HiddenInput()
-        self.fields['total_credit_amount'].widget = forms.HiddenInput()
-        self.fields['installments'].widget = forms.HiddenInput()
         
-        # Configurar choices para payment_method
-        self.fields['payment_method'].choices = [
-            ('', 'Seleccione un método de pago'),
-            ('efectivo', 'EFECTIVO'),
-            ('debito', 'DEBITO'),
-            ('transferencia', 'TRANSFERENCIA'),
-            ('credito', 'CREDITO'),
-        ]
+        # Configurar queryset para payment_method usando el modelo
+        self.fields['payment_method'].queryset = PaymentMethod.objects.all().order_by('name')
+        self.fields['payment_method'].empty_label = 'Seleccione un método de pago'
+        
+        # Configurar queryset para categorías
+        self.fields['category'].queryset = Category.objects.all().order_by('name')
+        
+        # Configurar queryset para payment_type (se filtrará dinámicamente)
+        # Inicialmente permitir todos los tipos, se filtrará en el frontend
+        self.fields['payment_type'].queryset = PaymentType.objects.all().order_by('payment_method', 'name')
+        self.fields['payment_type'].empty_label = 'Seleccione un tipo de pago'
+        self.fields['payment_type'].required = False
+        
+
 
     def clean(self):
         cleaned_data = super().clean()
         payment_method = cleaned_data.get('payment_method')
         payment_type = cleaned_data.get('payment_type')
         is_credit = cleaned_data.get('is_credit')
-        amount = cleaned_data.get('amount')
-        total_credit_amount = cleaned_data.get('total_credit_amount')
         installments = cleaned_data.get('installments')
         
         # Validar que el tipo de pago corresponda al método
@@ -57,19 +57,11 @@ class ExpenseForm(forms.ModelForm):
         
         # Validar campos de crédito
         if is_credit:
-            if not total_credit_amount or total_credit_amount <= 0:
-                raise ValidationError('Para pagos a crédito debe especificar el monto total')
-            
             if not installments or installments < 1:
                 raise ValidationError('Para pagos a crédito debe especificar el número de cuotas')
             
-            if installments > 60:
-                raise ValidationError('El número máximo de cuotas es 60')
-            
-            # Para la primera cuota, el monto debe ser 0 o el monto de la cuota
-            if amount and amount > 0:
-                if amount > total_credit_amount:
-                    raise ValidationError('El monto de la cuota no puede ser mayor al monto total del crédito')
+            if installments > 84:
+                raise ValidationError('El número máximo de cuotas es 84')
         
         return cleaned_data
 

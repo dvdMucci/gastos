@@ -133,29 +133,47 @@ def expense_create(request):
     """Crear un nuevo gasto"""
     if request.method == 'POST':
         form = ExpenseForm(request.POST)
+        print(f"DEBUG: Form is valid: {form.is_valid()}")
         if form.is_valid():
+            print(f"DEBUG: Form data: {form.cleaned_data}")
+            print(f"DEBUG: POST data installments: {request.POST.get('installments')}")
+            print(f"DEBUG: POST data total_credit_amount: {request.POST.get('total_credit_amount')}")
+            
             expense = form.save(commit=False)
             expense.user = request.user
+            
+            # Obtener valores del POST para campos que no están en el formulario
+            installments = request.POST.get('installments')
+            total_credit_amount = request.POST.get('total_credit_amount')
             
             # Manejar lógica de crédito
             if expense.payment_method.name == 'credito':
                 expense.is_credit = True
-                expense.total_credit_amount = form.cleaned_data.get('total_credit_amount', 0)
-                expense.installments = form.cleaned_data.get('installments', 1)
+                expense.installments = int(installments) if installments else 1
                 expense.current_installment = 0
-                expense.remaining_amount = expense.total_credit_amount
+                
+                # Obtener el monto total del formulario
+                total_amount = float(total_credit_amount) if total_credit_amount else form.cleaned_data.get('amount', 0)
+                expense.total_credit_amount = total_amount
+                
+                print(f"DEBUG: expense.installments = {expense.installments}")
+                print(f"DEBUG: expense.total_credit_amount = {expense.total_credit_amount}")
                 
                 # Crear grupo de crédito
                 import uuid
                 credit_group_id = str(uuid.uuid4())
                 expense.credit_group_id = credit_group_id
                 
+                # Para crédito, el monto inicial es 0 (es solo el registro principal)
+                expense.amount = 0
+                
                 # Guardar el gasto principal
                 expense.save()
                 
                 # Crear cuotas futuras
-                if expense.installments > 1:
-                    amount_per_installment = expense.total_credit_amount / expense.installments
+                if expense.installments > 0:
+                    # Calcular monto por cuota
+                    amount_per_installment = total_amount / expense.installments
                     current_date = expense.date
                     
                     for i in range(1, expense.installments + 1):
@@ -165,33 +183,37 @@ def expense_create(request):
                         else:
                             next_date = current_date.replace(month=current_date.month + 1)
                         
-                        # Crear cuota
+                        # Crear cuota con el monto calculado
                         installment_expense = Expense.objects.create(
                             user=request.user,
                             date=next_date,
                             name=f"{expense.name} - Cuota {i}",
-                            amount=amount_per_installment,
+                            amount=amount_per_installment,  # Monto calculado por cuota
                             category=expense.category,
                             payment_method=expense.payment_method,
                             payment_type=expense.payment_type,
                             description=f"Cuota {i} de {expense.installments} - {expense.description or ''}",
                             is_credit=True,
-                            total_credit_amount=expense.total_credit_amount,
+                            total_credit_amount=total_amount,  # Monto total del crédito
                             installments=expense.installments,
                             current_installment=i,
-                            remaining_amount=expense.total_credit_amount - (amount_per_installment * i),
+                            remaining_amount=total_amount - (amount_per_installment * i),  # Monto restante
                             credit_group_id=credit_group_id
                         )
                         
                         current_date = next_date
                 
-                messages.success(request, f'Gasto a crédito creado exitosamente. Se crearon {expense.installments} cuotas.')
+                messages.success(request, f'Gasto a crédito creado exitosamente. Se crearon {expense.installments} cuotas mensuales de ${amount_per_installment:.2f} cada una.')
             else:
                 expense.is_credit = False
+                expense.amount = 0  # Por defecto 0, se puede editar después
                 expense.save()
                 messages.success(request, 'Gasto creado exitosamente.')
             
             return redirect('finances:expense_list')
+        else:
+            print(f"DEBUG: Form errors: {form.errors}")
+            print(f"DEBUG: Form data: {request.POST}")
     else:
         form = ExpenseForm()
     
@@ -210,10 +232,18 @@ def expense_edit(request, pk):
     if request.method == 'POST':
         form = ExpenseForm(request.POST, instance=expense)
         if form.is_valid():
+            print(f"DEBUG EDIT: Form data: {form.cleaned_data}")
+            print(f"DEBUG EDIT: POST data installments: {request.POST.get('installments')}")
+            print(f"DEBUG EDIT: POST data total_credit_amount: {request.POST.get('total_credit_amount')}")
+            
             old_is_credit = expense.is_credit
             old_credit_group_id = expense.credit_group_id
             old_installments = expense.installments
             old_total_amount = expense.total_credit_amount
+            
+            # Obtener valores del POST para campos que no están en el formulario
+            installments = request.POST.get('installments')
+            total_credit_amount = request.POST.get('total_credit_amount')
             
             # Actualizar el gasto
             expense = form.save(commit=False)
@@ -221,8 +251,8 @@ def expense_edit(request, pk):
             # Manejar cambios en crédito
             if expense.payment_method.name == 'credito':
                 expense.is_credit = True
-                expense.total_credit_amount = form.cleaned_data.get('total_credit_amount', 0)
-                expense.installments = form.cleaned_data.get('installments', 1)
+                expense.total_credit_amount = float(total_credit_amount) if total_credit_amount else form.cleaned_data.get('total_credit_amount', 0)
+                expense.installments = int(installments) if installments else form.cleaned_data.get('installments', 1)
                 
                 # Si es un gasto a crédito existente y cambió algo importante
                 if old_is_credit and old_credit_group_id:

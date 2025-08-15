@@ -45,7 +45,7 @@ class ExpenseForecast(models.Model):
     name = models.CharField(max_length=200, verbose_name="Nombre del gasto")
     description = models.TextField(blank=True, null=True, verbose_name="Descripción")
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Monto estimado")
-    expense_type = models.CharField(max_length=20, choices=EXPENSE_TYPE_CHOICES, verbose_name='Tipo de Gasto')
+    expense_type = models.CharField(max_length=20, choices=EXPENSE_TYPE_CHOICES, default='other', verbose_name='Tipo de Gasto')
     
     # Categoría y método de pago
     category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name="Categoría")

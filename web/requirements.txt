@@ -1,15 +1,14 @@
-django
-mysqlclient  
-python-dotenv
-Pillow
-django-otp
-django-environ
-django-two-factor-auth[phonenumbers]
-qrcode
-pyotp
-django-otp
-djangorestframework
-openpyxl
-python-telegram-bot
-whisper
-torch
+django>=4.2,<5.0
+mysqlclient>=2.1.0
+python-dotenv>=1.0.0
+Pillow>=10.0.0
+django-otp>=1.2.0
+django-environ>=0.11.0
+django-two-factor-auth[phonenumbers]>=1.15.0
+qrcode>=7.4.0
+pyotp>=2.8.0
+djangorestframework>=3.14.0
+openpyxl>=3.1.0
+python-telegram-bot>=20.0
+# whisper>=1.0.0  # Comentado por ser muy pesado
+# torch>=2.0.0    # Comentado por ser muy pesado - solo descomenta si realmente lo necesitas

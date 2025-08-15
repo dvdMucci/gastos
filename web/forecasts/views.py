@@ -247,3 +247,51 @@ def activate_suggestion(request, pk):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Método no permitido'})
+
+@login_required
+def expense_forecast_list(request):
+    """Lista todas las estimaciones de gastos del usuario"""
+    # Obtener estimaciones del usuario actual
+    forecasts = ExpenseForecast.objects.filter(user=request.user).order_by('-created_at')
+    
+    # Aplicar filtros
+    form = ForecastFilterForm(request.GET)
+    if form.is_valid():
+        year = form.cleaned_data.get('year')
+        month = form.cleaned_data.get('month')
+        min_amount = form.cleaned_data.get('min_amount')
+        max_amount = form.cleaned_data.get('max_amount')
+        expense_type = form.cleaned_data.get('expense_type')
+        is_active = form.cleaned_data.get('is_active')
+        
+        if year:
+            forecasts = forecasts.filter(start_date__year=year)
+        if month:
+            forecasts = forecasts.filter(start_date__month=month)
+        if min_amount:
+            forecasts = forecasts.filter(amount__gte=min_amount)
+        if max_amount:
+            forecasts = forecasts.filter(amount__lte=max_amount)
+        if expense_type:
+            forecasts = forecasts.filter(expense_type=expense_type)
+        if is_active is not None:
+            forecasts = forecasts.filter(is_active=is_active)
+    
+    # Paginación
+    paginator = Paginator(forecasts, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Estadísticas
+    total_forecasts = forecasts.count()
+    active_forecasts = forecasts.filter(is_active=True).count()
+    total_amount = forecasts.aggregate(total=Sum('amount'))['total'] or 0
+    
+    context = {
+        'page_obj': page_obj,
+        'form': form,
+        'total_forecasts': total_forecasts,
+        'active_forecasts': active_forecasts,
+        'total_amount': total_amount,
+    }
+    return render(request, 'forecasts/forecast_list.html', context)
