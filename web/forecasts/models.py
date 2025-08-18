@@ -217,10 +217,24 @@ class ExpenseForecast(models.Model):
                     confidence = 'low'
                 
                 # Crear o actualizar la sugerencia
+                from datetime import date, timedelta
+                
+                # Calcular fechas de inicio y fin (próximo año)
+                start_date = date.today()
+                end_date = start_date + timedelta(days=365)
+                
+                # Obtener método y tipo de pago por defecto
+                default_payment_method = PaymentMethod.objects.first()
+                default_payment_type = PaymentType.objects.filter(
+                    payment_method=default_payment_method,
+                    is_default=True
+                ).first() or PaymentType.objects.filter(payment_method=default_payment_method).first()
+                
                 suggestion, created = cls.objects.get_or_create(
                     name=f"Estimación automática - {category.name}",
                     category=category,
                     expense_type=expense_type,
+                    user=user,  # Agregar usuario
                     defaults={
                         'amount': monthly_avg,
                         'frequency': 'monthly',
@@ -228,6 +242,11 @@ class ExpenseForecast(models.Model):
                         'is_active': False,  # Las sugerencias automáticas no están activas por defecto
                         'is_automatic_suggestion': True,
                         'suggested_based_on_months': months_back,
+                        'payment_method': default_payment_method,
+                        'payment_type': default_payment_type,
+                        'start_date': start_date,
+                        'end_date': end_date,
+                        'forecast_type': 'estimated',
                     }
                 )
                 
