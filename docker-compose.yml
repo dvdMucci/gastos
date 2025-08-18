@@ -23,6 +23,7 @@ services:
     restart: always
     volumes:
       - ./web:/app  # Mapea tu código local para desarrollo en tiempo real
+      - ./gastos_data:/gastos  # Mapea directorio local para archivos de gastos
     command: ["./wait-for-db.sh", "sh", "-c", "python manage.py makemigrations && python manage.py migrate && python create_superuser.py && python manage.py populate_finances && python manage.py runserver 0.0.0.0:8000"]
     ports:
       - "5800:8000"

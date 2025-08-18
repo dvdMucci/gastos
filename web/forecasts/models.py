@@ -1,7 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date 
 import calendar
 from finances.models import Category, PaymentMethod, PaymentType
 from accounts.models import CustomUser
@@ -217,7 +217,7 @@ class ExpenseForecast(models.Model):
                     confidence = 'low'
                 
                 # Crear o actualizar la sugerencia
-                from datetime import date, timedelta
+                #from datetime import date, timedelta
                 
                 # Calcular fechas de inicio y fin (próximo año)
                 forecast_start_date = date.today()

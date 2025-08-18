@@ -75,7 +75,7 @@ class Command(BaseCommand):
             'la anonima': 'Supermercado',
             'la anónima': 'Supermercado',
             'la ecologica': 'Supermercado',
-            'eden': 'Supermercado',
+            'eden': 'Luz',
             'miga': 'Panadería',
             'pan': 'Panadería',
             'papitas': 'Supermercado',
