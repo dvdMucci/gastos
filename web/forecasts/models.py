@@ -220,8 +220,8 @@ class ExpenseForecast(models.Model):
                 from datetime import date, timedelta
                 
                 # Calcular fechas de inicio y fin (próximo año)
-                start_date = date.today()
-                end_date = start_date + timedelta(days=365)
+                forecast_start_date = date.today()
+                forecast_end_date = forecast_start_date + timedelta(days=365)
                 
                 # Obtener método y tipo de pago por defecto
                 default_payment_method = PaymentMethod.objects.first()
@@ -244,8 +244,8 @@ class ExpenseForecast(models.Model):
                         'suggested_based_on_months': months_back,
                         'payment_method': default_payment_method,
                         'payment_type': default_payment_type,
-                        'start_date': start_date,
-                        'end_date': end_date,
+                        'start_date': forecast_start_date,
+                        'end_date': forecast_end_date,
                         'forecast_type': 'estimated',
                     }
                 )
