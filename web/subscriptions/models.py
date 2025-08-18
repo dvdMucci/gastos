@@ -55,15 +55,16 @@ class Subscription(models.Model):
         return f"{self.name} - ${self.amount} ({self.get_frequency_display()})"
     
     def save(self, *args, **kwargs):
-        # Si es una nueva suscripción o cambió el monto, crear gastos futuros
-        if not self.pk or 'amount' in kwargs.get('update_fields', []):
-            self._create_future_expenses()
-        
         # Calcular próxima validación de renovación (5 años desde la fecha de inicio)
         if not self.next_renewal_validation:
             self.next_renewal_validation = self.start_date + timedelta(days=5*365)
         
         super().save(*args, **kwargs)
+        
+        # Si es una nueva suscripción o cambió el monto, crear gastos futuros
+        # Solo después de guardar para tener el pk
+        if not kwargs.get('update_fields') or 'amount' in kwargs.get('update_fields', []):
+            self._create_future_expenses()
     
     def _create_future_expenses(self):
         """Crear gastos futuros hasta 5 años adelante"""
