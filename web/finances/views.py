@@ -164,8 +164,9 @@ def expense_create(request):
                 credit_group_id = str(uuid.uuid4())
                 expense.credit_group_id = credit_group_id
                 
-                # Para crédito, el monto inicial es 0 (es solo el registro principal)
+                # Para crédito, el monto inicial es 0, pero el nombre incluye el monto total
                 expense.amount = 0
+                expense.name = f"{expense.name} - ${total_amount:,.0f}"
                 
                 # Guardar el gasto principal
                 expense.save()
