@@ -201,7 +201,9 @@ class ExpenseForecast(models.Model):
             count = category_counts[category]
             if count >= 2:  # Solo sugerir si hay al menos 2 gastos
                 avg_amount = total / count
-                monthly_avg = avg_amount * (12 / months_back)  # Proyectar a 12 meses
+                # Convertir a Decimal para evitar problemas de tipos
+                from decimal import Decimal
+                monthly_avg = avg_amount * (Decimal('12') / Decimal(str(months_back)))  # Proyectar a 12 meses
                 
                 # Determinar tipo de gasto basado en la categoría
                 expense_type = cls._categorize_expense_type(category.name)
