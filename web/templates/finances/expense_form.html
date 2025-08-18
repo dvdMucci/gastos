@@ -135,11 +135,17 @@
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label for="id_installments" class="form-label">Número de Cuotas *</label>
-                                        <input type="number" name="installments" class="form-control" min="1" max="60" id="id_installments" 
-                                               value="{% if form.instance.pk and form.instance.installments %}{{ form.instance.installments }}{% else %}1{% endif %}">
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" min="1" max="60" id="id_installments_visible" 
+                                                   value="{% if form.instance.pk and form.instance.installments %}{{ form.instance.installments }}{% else %}1{% endif %}">
+                                            <button type="button" class="btn btn-outline-secondary" id="sync_installments">
+                                                <i class="fas fa-sync-alt"></i>
+                                            </button>
+                                        </div>
                                         {% if form.installments.errors %}
                                             <div class="text-danger">{{ form.installments.errors }}</div>
                                         {% endif %}
+                                        <small class="form-text text-muted">Haz clic en el botón de sincronización para actualizar el valor</small>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -198,10 +204,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const paymentTypeSelect = document.getElementById('id_payment_type');
     const creditFields = document.getElementById('credit-fields');
     const isCreditField = document.getElementById('id_is_credit');
-    const installmentsField = document.getElementById('id_installments');
+    const installmentsField = document.getElementById('id_installments_visible');
     const installmentAmountField = document.getElementById('id_installment_amount');
     const amountField = document.getElementById('id_amount');
     const todayBtn = document.getElementById('today-btn');
+    const syncInstallmentsBtn = document.getElementById('sync_installments');
 
     // Función para establecer la fecha de hoy
     function setTodayDate() {
@@ -223,6 +230,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Event listener para el botón Hoy
     todayBtn.addEventListener('click', setTodayDate);
+    
+    // Event listener para sincronizar installments
+    syncInstallmentsBtn.addEventListener('click', function() {
+        const hiddenInstallmentsField = document.getElementById('id_installments');
+        if (hiddenInstallmentsField) {
+            hiddenInstallmentsField.value = installmentsField.value;
+            // Mostrar feedback visual
+            this.innerHTML = '<i class="fas fa-check"></i>';
+            this.classList.remove('btn-outline-secondary');
+            this.classList.add('btn-success');
+            setTimeout(() => {
+                this.innerHTML = '<i class="fas fa-sync-alt"></i>';
+                this.classList.remove('btn-success');
+                this.classList.add('btn-outline-secondary');
+            }, 1000);
+        }
+    });
 
     // Función para cargar tipos de pago
     function loadPaymentTypes(paymentMethodId) {
@@ -281,6 +305,12 @@ document.addEventListener('DOMContentLoaded', function() {
             isCreditField.value = 'true';
             installmentsField.required = true;
             
+            // Sincronizar automáticamente el valor de installments
+            const hiddenInstallmentsField = document.getElementById('id_installments');
+            if (hiddenInstallmentsField) {
+                hiddenInstallmentsField.value = installmentsField.value;
+            }
+            
             // Calcular valor de cuota inicial
             calculateInstallmentAmount();
         } else {
@@ -315,7 +345,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (creditFields.style.display !== 'none') {
             calculateInstallmentAmount();
         }
-        // Sincronizar con el campo oculto del formulario
+        // Sincronizar automáticamente con el campo oculto del formulario
         const hiddenInstallmentsField = document.getElementById('id_installments');
         if (hiddenInstallmentsField) {
             hiddenInstallmentsField.value = this.value;
