@@ -229,3 +229,16 @@ class Subscription(models.Model):
         """Marcar que se envió el recordatorio de renovación"""
         self.renewal_reminder_sent = True
         self.save(update_fields=['renewal_reminder_sent'])
+    
+    def get_monthly_amount(self):
+        """Obtener monto mensual basado en la frecuencia de la suscripción"""
+        if self.frequency == 'monthly':
+            return self.amount
+        elif self.frequency == 'quarterly':
+            return self.amount / 3
+        elif self.frequency == 'biannual':
+            return self.amount / 6
+        elif self.frequency == 'annual':
+            return self.amount / 12
+        else:
+            return self.amount
