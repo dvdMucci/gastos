@@ -10,7 +10,7 @@ class ExpenseForm(forms.ModelForm):
         model = Expense
         fields = [
             'name', 'amount', 'date', 'category', 'payment_method', 
-            'payment_type', 'description', 'is_credit'
+            'payment_type', 'description', 'is_credit', 'installments'
         ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
@@ -21,6 +21,7 @@ class ExpenseForm(forms.ModelForm):
             'payment_type': forms.Select(attrs={'class': 'form-control', 'id': 'id_payment_type', 'style': 'display: none;'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'is_credit': forms.HiddenInput(),
+            'installments': forms.HiddenInput(),
         }
     
     def __init__(self, *args, **kwargs):

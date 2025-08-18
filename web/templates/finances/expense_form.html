@@ -172,6 +172,7 @@
 
                         <!-- Campos ocultos para crédito -->
                         {{ form.is_credit }}
+                        {{ form.installments }}
                         <input type="hidden" name="total_credit_amount" id="id_total_credit_amount" 
                                value="{% if form.instance.pk and form.instance.total_credit_amount %}{{ form.instance.total_credit_amount }}{% endif %}">
 
@@ -314,12 +315,25 @@ document.addEventListener('DOMContentLoaded', function() {
         if (creditFields.style.display !== 'none') {
             calculateInstallmentAmount();
         }
+        // Sincronizar con el campo oculto del formulario
+        const hiddenInstallmentsField = document.getElementById('id_installments');
+        if (hiddenInstallmentsField) {
+            hiddenInstallmentsField.value = this.value;
+        }
     });
 
     // Si ya hay un valor seleccionado al cargar la página
     if (paymentMethodSelect.value) {
         loadPaymentTypes(paymentMethodSelect.value);
         handleCreditFields(paymentMethodSelect.value);
+    }
+    
+    // Sincronizar campo installments al cargar la página
+    if (installmentsField.value) {
+        const hiddenInstallmentsField = document.getElementById('id_installments');
+        if (hiddenInstallmentsField) {
+            hiddenInstallmentsField.value = installmentsField.value;
+        }
     }
 
     // Establecer fecha de hoy por defecto si no hay fecha seleccionada

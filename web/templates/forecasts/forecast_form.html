@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (selectedMethod) {
             // Hacer petición AJAX para obtener tipos de pago
-            fetch(`/finances/ajax/payment-types/?payment_method=${selectedMethod}`)
+            fetch(`/finances/get-payment-types/?payment_method=${selectedMethod}`)
                 .then(response => response.json())
                 .then(data => {
                     data.forEach(paymentType => {

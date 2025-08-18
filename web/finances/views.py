@@ -206,7 +206,8 @@ def expense_create(request):
                 messages.success(request, f'Gasto a crédito creado exitosamente. Se crearon {expense.installments} cuotas mensuales de ${amount_per_installment:.2f} cada una.')
             else:
                 expense.is_credit = False
-                expense.amount = 0  # Por defecto 0, se puede editar después
+                # Para gastos normales, usar el monto del formulario
+                expense.amount = form.cleaned_data.get('amount', 0)
                 expense.save()
                 messages.success(request, 'Gasto creado exitosamente.')
             
