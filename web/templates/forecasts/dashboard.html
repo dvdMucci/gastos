@@ -135,7 +135,9 @@
             <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Proyección de Gastos (6 meses atrás + 12 meses adelante)</h5>
         </div>
         <div class="card-body">
-            <canvas id="forecastChart" width="400" height="200"></canvas>
+            <div style="height: 400px;">
+                <canvas id="forecastChart" width="400" height="400"></canvas>
+            </div>
         </div>
     </div>
 
@@ -234,54 +236,261 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Datos del gráfico
-    const chartData = {
-        labels: {{ chart_labels|safe }},
-        datasets: [
-            {
-                label: 'Suscripciones',
-                data: {{ subscriptions_data|safe }},
-                backgroundColor: 'rgba(40, 167, 69, 0.8)',
-                borderColor: 'rgba(40, 167, 69, 1)',
-                borderWidth: 2,
-                hidden: false
-            },
-            {
-                label: 'Créditos',
-                data: {{ credits_data|safe }},
-                backgroundColor: 'rgba(255, 193, 7, 0.8)',
-                borderColor: 'rgba(255, 193, 7, 1)',
-                borderWidth: 2,
-                hidden: false
-            },
-            {
-                label: 'Estimaciones Activas',
-                data: {{ estimates_data|safe }},
-                backgroundColor: 'rgba(23, 162, 184, 0.8)',
-                borderColor: 'rgba(23, 162, 184, 1)',
-                borderWidth: 2,
-                hidden: false
-            },
-            {
-                label: 'Otros Gastos',
-                data: {{ other_data|safe }},
-                backgroundColor: 'rgba(108, 117, 125, 0.8)',
-                borderColor: 'rgba(108, 117, 125, 1)',
-                borderWidth: 2,
-                hidden: false
-            }
-        ]
-    };
-
+    const chartLabels = {{ chart_labels|safe }};
+    const historicalData = {{ historical_data|safe }};
+    const projectedData = {{ projected_data|safe }};
+    const currentMonthReal = {{ current_month_real|safe }};
+    const currentMonthProjected = {{ current_month_projected|safe }};
+    
+    // Preparar datasets para barras apiladas
+    const datasets = [];
+    
+    // Datos históricos (6 meses pasados) - barras apiladas
+    const historicalSubscriptions = chartLabels.map((label, index) => 
+        historicalData[index] ? historicalData[index].subscriptions : null
+    );
+    const historicalCredits = chartLabels.map((label, index) => 
+        historicalData[index] ? historicalData[index].credits : null
+    );
+    const historicalOther = chartLabels.map((label, index) => 
+        historicalData[index] ? historicalData[index].other : null
+    );
+    
+    // Datos proyectados (12 meses futuros) - barras apiladas
+    const projectedSubscriptions = chartLabels.map((label, index) => 
+        projectedData[index] ? projectedData[index].subscriptions : null
+    );
+    const projectedCredits = chartLabels.map((label, index) => 
+        projectedData[index] ? projectedData[index].credits : null
+    );
+    const projectedEstimates = chartLabels.map((label, index) => 
+        projectedData[index] ? projectedData[index].estimates : null
+    );
+    
+    // Mes actual - datos reales
+    const currentRealSubscriptions = chartLabels.map((label, index) => 
+        currentMonthReal[index] ? currentMonthReal[index].subscriptions : null
+    );
+    const currentRealCredits = chartLabels.map((label, index) => 
+        currentMonthReal[index] ? currentMonthReal[index].credits : null
+    );
+    const currentRealOther = chartLabels.map((label, index) => 
+        currentMonthReal[index] ? currentMonthReal[index].other : null
+    );
+    
+    // Mes actual - datos proyectados
+    const currentProjectedSubscriptions = chartLabels.map((label, index) => 
+        currentMonthProjected[index] ? currentMonthProjected[index].subscriptions : null
+    );
+    const currentProjectedCredits = chartLabels.map((label, index) => 
+        currentMonthProjected[index] ? currentMonthProjected[index].credits : null
+    );
+    const currentProjectedEstimates = chartLabels.map((label, index) => 
+        currentMonthProjected[index] ? currentMonthProjected[index].estimates : null
+    );
+    
+    // Agregar datasets para datos históricos
+    datasets.push({
+        label: 'Suscripciones (Histórico)',
+        data: historicalSubscriptions,
+        backgroundColor: 'rgba(40, 167, 69, 0.8)',
+        borderColor: 'rgba(40, 167, 69, 1)',
+        borderWidth: 1,
+        stack: 'historical',
+        hidden: false
+    });
+    
+    datasets.push({
+        label: 'Créditos (Histórico)',
+        data: historicalCredits,
+        backgroundColor: 'rgba(255, 193, 7, 0.8)',
+        borderColor: 'rgba(255, 193, 7, 1)',
+        borderWidth: 1,
+        stack: 'historical',
+        hidden: false
+    });
+    
+    datasets.push({
+        label: 'Otros Gastos (Histórico)',
+        data: historicalOther,
+        backgroundColor: 'rgba(108, 117, 125, 0.8)',
+        borderColor: 'rgba(108, 117, 125, 1)',
+        borderWidth: 1,
+        stack: 'historical',
+        hidden: false
+    });
+    
+    // Agregar datasets para mes actual - datos reales
+    datasets.push({
+        label: 'Suscripciones (Mes Actual - Real)',
+        data: currentRealSubscriptions,
+        backgroundColor: 'rgba(40, 167, 69, 0.9)',
+        borderColor: 'rgba(40, 167, 69, 1)',
+        borderWidth: 2,
+        stack: 'current_real',
+        hidden: false
+    });
+    
+    datasets.push({
+        label: 'Créditos (Mes Actual - Real)',
+        data: currentRealCredits,
+        backgroundColor: 'rgba(255, 193, 7, 0.9)',
+        borderColor: 'rgba(255, 193, 7, 1)',
+        borderWidth: 2,
+        stack: 'current_real',
+        hidden: false
+    });
+    
+    datasets.push({
+        label: 'Otros Gastos (Mes Actual - Real)',
+        data: currentRealOther,
+        backgroundColor: 'rgba(108, 117, 125, 0.9)',
+        borderColor: 'rgba(108, 117, 125, 1)',
+        borderWidth: 2,
+        stack: 'current_real',
+        hidden: false
+    });
+    
+    // Agregar datasets para mes actual - datos proyectados
+    datasets.push({
+        label: 'Suscripciones (Mes Actual - Proyectado)',
+        data: currentProjectedSubscriptions,
+        backgroundColor: 'rgba(40, 167, 69, 0.6)',
+        borderColor: 'rgba(40, 167, 69, 1)',
+        borderWidth: 2,
+        stack: 'current_projected',
+        hidden: false
+    });
+    
+    datasets.push({
+        label: 'Créditos (Mes Actual - Proyectado)',
+        data: currentProjectedCredits,
+        backgroundColor: 'rgba(255, 193, 7, 0.6)',
+        borderColor: 'rgba(255, 193, 7, 1)',
+        borderWidth: 2,
+        stack: 'current_projected',
+        hidden: false
+    });
+    
+    datasets.push({
+        label: 'Estimaciones (Mes Actual - Proyectado)',
+        data: currentProjectedEstimates,
+        backgroundColor: 'rgba(23, 162, 184, 0.6)',
+        borderColor: 'rgba(23, 162, 184, 1)',
+        borderWidth: 2,
+        stack: 'current_projected',
+        hidden: false
+    });
+    
+    // Agregar datasets para datos proyectados futuros
+    datasets.push({
+        label: 'Suscripciones (Futuro)',
+        data: projectedSubscriptions,
+        backgroundColor: 'rgba(40, 167, 69, 0.4)',
+        borderColor: 'rgba(40, 167, 69, 1)',
+        borderWidth: 1,
+        stack: 'projected',
+        hidden: false
+    });
+    
+    datasets.push({
+        label: 'Créditos (Futuro)',
+        data: projectedCredits,
+        backgroundColor: 'rgba(255, 193, 7, 0.4)',
+        borderColor: 'rgba(255, 193, 7, 1)',
+        borderWidth: 1,
+        stack: 'projected',
+        hidden: false
+    });
+    
+    datasets.push({
+        label: 'Estimaciones (Futuro)',
+        data: projectedEstimates,
+        backgroundColor: 'rgba(23, 162, 184, 0.4)',
+        borderColor: 'rgba(23, 162, 184, 1)',
+        borderWidth: 1,
+        stack: 'projected',
+        hidden: false
+    });
+    
+    // Calcular máximos para la línea conectora
+    const maxValues = chartLabels.map((label, index) => {
+        let max = 0;
+        
+        // Máximo de datos históricos
+        if (historicalData[index]) {
+            max = Math.max(max, 
+                historicalData[index].subscriptions + 
+                historicalData[index].credits + 
+                historicalData[index].other
+            );
+        }
+        
+        // Máximo de mes actual - real
+        if (currentMonthReal[index]) {
+            max = Math.max(max, 
+                currentMonthReal[index].subscriptions + 
+                currentMonthReal[index].credits + 
+                currentMonthReal[index].other
+            );
+        }
+        
+        // Máximo de mes actual - proyectado
+        if (currentMonthProjected[index]) {
+            max = Math.max(max, 
+                currentMonthProjected[index].subscriptions + 
+                currentMonthProjected[index].credits + 
+                currentMonthProjected[index].estimates
+            );
+        }
+        
+        // Máximo de datos proyectados futuros
+        if (projectedData[index]) {
+            max = Math.max(max, 
+                projectedData[index].subscriptions + 
+                projectedData[index].credits + 
+                projectedData[index].estimates
+            );
+        }
+        
+        return max;
+    });
+    
+    // Agregar línea conectora de máximos
+    datasets.push({
+        label: 'Línea de Máximos',
+        data: maxValues,
+        type: 'line',
+        backgroundColor: 'rgba(220, 53, 69, 0.2)',
+        borderColor: 'rgba(220, 53, 69, 1)',
+        borderWidth: 3,
+        borderDash: [5, 5],
+        pointBackgroundColor: 'rgba(220, 53, 69, 1)',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        fill: false,
+        tension: 0.1,
+        hidden: false
+    });
+    
     // Crear gráfico
     const ctx = document.getElementById('forecastChart').getContext('2d');
     const chart = new Chart(ctx, {
         type: 'bar',
-        data: chartData,
+        data: {
+            labels: chartLabels,
+            datasets: datasets
+        },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
+                x: {
+                    stacked: true,
+                },
                 y: {
+                    stacked: true,
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
@@ -297,30 +506,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             return context.dataset.label + ': $' + context.parsed.y.toLocaleString();
                         }
                     }
+                },
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20
+                    }
                 }
             }
         }
-    });
-
-    // Filtros del gráfico
-    document.getElementById('show-subscriptions').addEventListener('change', function() {
-        chart.getDatasetMeta(0).hidden = !this.checked;
-        chart.update();
-    });
-
-    document.getElementById('show-credits').addEventListener('change', function() {
-        chart.getDatasetMeta(1).hidden = !this.checked;
-        chart.update();
-    });
-
-    document.getElementById('show-estimates').addEventListener('change', function() {
-        chart.getDatasetMeta(2).hidden = !this.checked;
-        chart.update();
-    });
-
-    document.getElementById('show-other').addEventListener('change', function() {
-        chart.getDatasetMeta(3).hidden = !this.checked;
-        chart.update();
     });
 
     // Activar sugerencias automáticas

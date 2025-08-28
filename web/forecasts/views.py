@@ -33,35 +33,57 @@ def forecast_dashboard(request):
     total_credits = sum(f.projected_credits for f in monthly_forecasts if f.projected_credits)
     total_estimates = sum(f.projected_estimates for f in monthly_forecasts if f.projected_estimates)
     
-    # Preparar datos para el gráfico
+    # Preparar datos para el gráfico con barras apiladas
     chart_labels = []
-    subscriptions_data = []
-    credits_data = []
-    estimates_data = []
-    other_data = []
+    historical_data = []  # Para 6 meses pasados
+    projected_data = []   # Para 12 meses futuros
+    current_month_real = []  # Mes actual - datos reales
+    current_month_projected = []  # Mes actual - datos proyectados
+    
+    # Separar datos por período
+    current_date = timezone.now().date()
+    current_month = current_date.replace(day=1)
     
     for forecast in monthly_forecasts:
         month_name = forecast.month.strftime('%b %Y')
         chart_labels.append(month_name)
         
-        # Datos históricos
-        if forecast.actual_subscriptions or forecast.actual_credits or forecast.actual_other_expenses:
-            subscriptions_data.append(float(forecast.actual_subscriptions or 0))
-            credits_data.append(float(forecast.actual_credits or 0))
-            estimates_data.append(0)  # No hay estimaciones en datos históricos
-            other_data.append(float(forecast.actual_other_expenses or 0))
-        # Mes actual
-        elif forecast.current_month_estimated or forecast.current_month_actual:
-            subscriptions_data.append(float(forecast.current_month_estimated or 0))
-            credits_data.append(0)
-            estimates_data.append(0)
-            other_data.append(0)
-        # Meses futuros
+        # 6 meses pasados - datos históricos
+        if forecast.month < current_month:
+            historical_data.append({
+                'subscriptions': float(forecast.actual_subscriptions or 0),
+                'credits': float(forecast.actual_credits or 0),
+                'other': float(forecast.actual_other_expenses or 0)
+            })
+            projected_data.append(None)  # No hay datos proyectados para meses pasados
+            current_month_real.append(None)
+            current_month_projected.append(None)
+        
+        # Mes actual - dos barras separadas
+        elif forecast.month == current_month:
+            historical_data.append(None)
+            projected_data.append(None)
+            current_month_real.append({
+                'subscriptions': float(forecast.actual_subscriptions or 0),
+                'credits': float(forecast.actual_credits or 0),
+                'other': float(forecast.actual_other_expenses or 0)
+            })
+            current_month_projected.append({
+                'subscriptions': float(forecast.projected_subscriptions or 0),
+                'credits': float(forecast.projected_credits or 0),
+                'estimates': float(forecast.projected_estimates or 0)
+            })
+        
+        # 12 meses futuros - datos proyectados
         else:
-            subscriptions_data.append(float(forecast.projected_subscriptions or 0))
-            credits_data.append(float(forecast.projected_credits or 0))
-            estimates_data.append(float(forecast.projected_estimates or 0))
-            other_data.append(0)
+            historical_data.append(None)
+            projected_data.append({
+                'subscriptions': float(forecast.projected_subscriptions or 0),
+                'credits': float(forecast.projected_credits or 0),
+                'estimates': float(forecast.projected_estimates or 0)
+            })
+            current_month_real.append(None)
+            current_month_projected.append(None)
     
     context = {
         'monthly_forecasts': monthly_forecasts,
@@ -72,10 +94,10 @@ def forecast_dashboard(request):
         'total_credits': total_credits,
         'total_estimates': total_estimates,
         'chart_labels': chart_labels,
-        'subscriptions_data': subscriptions_data,
-        'credits_data': credits_data,
-        'estimates_data': estimates_data,
-        'other_data': other_data,
+        'historical_data': historical_data,
+        'projected_data': projected_data,
+        'current_month_real': current_month_real,
+        'current_month_projected': current_month_projected,
     }
     return render(request, 'forecasts/dashboard.html', context)
 
