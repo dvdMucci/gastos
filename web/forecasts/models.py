@@ -442,18 +442,16 @@ class MonthlyForecast(models.Model):
         from subscriptions.models import Subscription
         from .models import ExpenseForecast
         
-        # Proyecciones de suscripciones
+        # Proyecciones de suscripciones activas
         subscriptions = Subscription.objects.filter(status='active')
         subscriptions_total = sum(sub.get_monthly_amount() for sub in subscriptions)
         
-        # Proyecciones de créditos
+        # Proyecciones de créditos activos (créditos que aún tienen cuotas pendientes)
         credits = Expense.objects.filter(
             is_credit=True,
-            date__year=month_date.year,
-            date__month=month_date.month
+            remaining_amount__gt=0
         )
-        credits_total = credits.aggregate(
-            total=models.Sum('amount'))['total'] or 0
+        credits_total = sum(credit.amount for credit in credits if credit.installments and credit.current_installment < credit.installments)
         
         # Proyecciones de estimaciones activas
         estimates = ExpenseForecast.objects.filter(is_active=True)
@@ -489,15 +487,13 @@ class MonthlyForecast(models.Model):
         subscriptions = Subscription.objects.filter(status='active')
         subscriptions_total = sum(sub.get_monthly_amount() for sub in subscriptions)
         
-        # Créditos del mes
+        # Créditos activos (créditos que aún tienen cuotas pendientes)
         from finances.models import Expense
         credits = Expense.objects.filter(
             is_credit=True,
-            date__year=month_date.year,
-            date__month=month_date.month
+            remaining_amount__gt=0
         )
-        credits_total = credits.aggregate(
-            total=models.Sum('amount'))['total'] or 0
+        credits_total = sum(credit.amount for credit in credits if credit.installments and credit.current_installment < credit.installments)
         
         # Estimaciones activas
         estimates = ExpenseForecast.objects.filter(is_active=True)

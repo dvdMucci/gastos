@@ -19,4 +19,5 @@ urlpatterns = [
     path('generate/', views.generate_forecasts, name='generate_forecasts'),
     path('generate-suggestions/', views.generate_suggestions, name='generate_suggestions'),
     path('expense-forecast/<int:pk>/activate/', views.activate_suggestion, name='activate_suggestion'),
+    path('regenerate-current-month/', views.regenerate_current_month, name='regenerate_current_month'),
 ]
