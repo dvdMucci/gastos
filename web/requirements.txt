@@ -1,5 +1,5 @@
 django
-mysqlclient  
+mysqlclient
 python-dotenv
 Pillow
 django-otp
@@ -9,7 +9,10 @@ qrcode
 pyotp
 django-otp
 djangorestframework
+django-filter
 openpyxl
 python-telegram-bot
 whisper
 torch
+redis
+django-redis

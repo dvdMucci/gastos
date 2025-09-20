@@ -9,8 +9,8 @@ class ExpenseForm(forms.ModelForm):
     class Meta:
         model = Expense
         fields = [
-            'name', 'amount', 'date', 'category', 'payment_method', 
-            'payment_type', 'description', 'is_credit', 'total_credit_amount', 'installments'
+            'name', 'amount', 'date', 'category', 'payment_method',
+            'payment_type', 'description', 'is_credit', 'total_credit_amount'
         ]
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
@@ -22,7 +22,6 @@ class ExpenseForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'is_credit': forms.HiddenInput(),
             'total_credit_amount': forms.HiddenInput(),
-            'installments': forms.HiddenInput(),
         }
     
     def __init__(self, *args, **kwargs):
@@ -30,15 +29,22 @@ class ExpenseForm(forms.ModelForm):
         # Ocultar campos de crédito inicialmente
         self.fields['is_credit'].widget = forms.HiddenInput()
         self.fields['total_credit_amount'].widget = forms.HiddenInput()
-        self.fields['installments'].widget = forms.HiddenInput()
-        
+        # Note: installments field is handled by custom HTML input, not Django form field
+
+        # Amount is required for all expenses (will be validated in clean() method)
+        self.fields['amount'].required = True
+
         # Configurar choices para payment_method
-        self.fields['payment_method'].choices = [
-            ('', 'Seleccione un método de pago'),
-            ('efectivo', 'EFECTIVO'),
-            ('debito', 'DEBITO'),
-            ('transferencia', 'TRANSFERENCIA'),
-            ('credito', 'CREDITO'),
+        self.fields['payment_method'].queryset = PaymentMethod.objects.all()
+        self.fields['payment_method'].choices = [('', 'Seleccione un método de pago')] + [
+            (pm.pk, pm.get_name_display()) for pm in PaymentMethod.objects.all()
+        ]
+
+        # Configurar choices para payment_type con todos los objetos PaymentType
+        # Esto asegura que la validación pase incluso con opciones cargadas dinámicamente
+        self.fields['payment_type'].queryset = PaymentType.objects.all()
+        self.fields['payment_type'].choices = [('', 'Seleccione un tipo de pago')] + [
+            (pt.pk, pt.get_name_display()) for pt in PaymentType.objects.all()
         ]
 
     def clean(self):
@@ -48,29 +54,36 @@ class ExpenseForm(forms.ModelForm):
         is_credit = cleaned_data.get('is_credit')
         amount = cleaned_data.get('amount')
         total_credit_amount = cleaned_data.get('total_credit_amount')
-        installments = cleaned_data.get('installments')
-        
+
+        # Get installments from POST data since we're using a custom input field
+        installments = self.data.get('installments')
+        if installments:
+            try:
+                installments = int(installments)
+            except (ValueError, TypeError):
+                installments = None
+
         # Validar que el tipo de pago corresponda al método
         if payment_method and payment_type:
             if payment_type.payment_method != payment_method:
                 raise ValidationError('El tipo de pago seleccionado no corresponde al método de pago')
-        
+
         # Validar campos de crédito
         if is_credit:
-            if not total_credit_amount or total_credit_amount <= 0:
-                raise ValidationError('Para pagos a crédito debe especificar el monto total')
-            
             if not installments or installments < 1:
                 raise ValidationError('Para pagos a crédito debe especificar el número de cuotas')
-            
+
             if installments > 60:
                 raise ValidationError('El número máximo de cuotas es 60')
-            
-            # Para la primera cuota, el monto debe ser 0 o el monto de la cuota
-            if amount and amount > 0:
-                if amount > total_credit_amount:
-                    raise ValidationError('El monto de la cuota no puede ser mayor al monto total del crédito')
-        
+
+            # For credit expenses, amount is required and will be used as total_credit_amount
+            if not amount or amount <= 0:
+                raise ValidationError('Para pagos a crédito debe especificar el monto total')
+        else:
+            # For non-credit expenses, amount is required
+            if not amount or amount <= 0:
+                raise ValidationError('Debe especificar el monto del gasto')
+
         return cleaned_data
 
 class ExpenseFilterForm(forms.Form):

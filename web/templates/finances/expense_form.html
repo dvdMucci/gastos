@@ -72,7 +72,7 @@
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="mb-3">
+                                <div class="mb-3" id="amount-field">
                                     <label for="{{ form.amount.id_for_label }}" class="form-label">Monto *</label>
                                     {{ form.amount }}
                                     {% if form.amount.errors %}
@@ -124,22 +124,13 @@
                             </div>
                         </div>
 
-                        <!-- Campos de crédito (se muestran solo cuando es necesario) -->
-                        <div id="credit-fields" style="display: none;">
+                        <!-- Campo de cuotas (se muestra solo para crédito) -->
+                        <div id="installments-field" style="display: none;">
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="{{ form.total_credit_amount.id_for_label }}" class="form-label">Monto Total del Crédito *</label>
-                                        <input type="number" name="total_credit_amount" class="form-control" step="0.01" id="id_total_credit_amount">
-                                        {% if form.total_credit_amount.errors %}
-                                            <div class="text-danger">{{ form.total_credit_amount.errors }}</div>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="{{ form.installments.id_for_label }}" class="form-label">Número de Cuotas *</label>
-                                        <input type="number" name="installments" class="form-control" min="1" max="60" id="id_installments">
+                                        <label for="id_installments" class="form-label">Número de Cuotas *</label>
+                                        <input type="number" name="installments" class="form-control" min="1" max="60" id="id_installments" required>
                                         {% if form.installments.errors %}
                                             <div class="text-danger">{{ form.installments.errors }}</div>
                                         {% endif %}
@@ -159,7 +150,6 @@
                         <!-- Campos ocultos para crédito -->
                         {{ form.is_credit }}
                         {{ form.total_credit_amount }}
-                        {{ form.installments }}
 
                         <div class="d-flex justify-content-between">
                             <a href="{% url 'finances:expense_list' %}" class="btn btn-secondary">
@@ -181,64 +171,79 @@
 document.addEventListener('DOMContentLoaded', function() {
     const paymentMethodSelect = document.getElementById('id_payment_method');
     const paymentTypeSelect = document.getElementById('id_payment_type');
-    const creditFields = document.getElementById('credit-fields');
+    const installmentsFieldDiv = document.getElementById('installments-field');
     const isCreditField = document.getElementById('id_is_credit');
-    const totalCreditAmountField = document.getElementById('id_total_credit_amount');
-    const installmentsField = document.getElementById('id_installments');
+    const installmentsInput = document.getElementById('id_installments');
 
     // Función para cargar tipos de pago
     function loadPaymentTypes(paymentMethod) {
+        console.log('Loading payment types for method:', paymentMethod);
         paymentTypeSelect.innerHTML = '<option value="">Cargando...</option>';
-        
+
         fetch(`/finances/get-payment-types/?payment_method=${paymentMethod}`)
             .then(response => response.json())
             .then(data => {
+                console.log('Received payment types data:', data);
                 paymentTypeSelect.innerHTML = '<option value="">Seleccione un tipo de pago</option>';
-                
-                data.payment_types.forEach(type => {
-                    const option = document.createElement('option');
-                    option.value = type.id;
-                    option.textContent = type.name;
-                    if (type.is_default) {
-                        option.selected = true;
-                    }
-                    paymentTypeSelect.appendChild(option);
-                });
-                
+
+                if (data.payment_types && Array.isArray(data.payment_types)) {
+                    data.payment_types.forEach(type => {
+                        const option = document.createElement('option');
+                        option.value = type.id;
+                        option.textContent = type.name;
+                        if (type.is_default) {
+                            option.selected = true;
+                        }
+                        paymentTypeSelect.appendChild(option);
+                    });
+                }
+
                 // Mostrar el campo de tipo de pago
                 paymentTypeSelect.style.display = 'block';
             })
             .catch(error => {
-                console.error('Error:', error);
-                paymentTypeSelect.innerHTML = '<option value="">Error al cargar tipos</option>';
+                console.error('Error loading payment types:', error);
+                // Fallback: mostrar todas las opciones disponibles
+                paymentTypeSelect.innerHTML = '<option value="">Error al cargar tipos - recargue la página</option>';
+                paymentTypeSelect.style.display = 'block';
             });
     }
 
     // Función para manejar campos de crédito
     function handleCreditFields(paymentMethod) {
-        if (paymentMethod === 'credito') {
-            creditFields.style.display = 'block';
-            isCreditField.value = 'true';
-            totalCreditAmountField.required = true;
-            installmentsField.required = true;
+        console.log('Handling credit fields for payment method:', paymentMethod);
+
+        if (paymentMethod === '4') {  // Primary key for CREDITO payment method
+            console.log('Showing installments field for credit');
+            installmentsFieldDiv.style.display = 'block';
+            installmentsInput.required = true;
+            isCreditField.value = 'on';  // Django BooleanField expects 'on' for True
         } else {
-            creditFields.style.display = 'none';
-            isCreditField.value = 'false';
-            totalCreditAmountField.required = false;
-            installmentsField.required = false;
+            console.log('Hiding installments field for non-credit');
+            installmentsFieldDiv.style.display = 'none';
+            installmentsInput.required = false;
+            isCreditField.value = '';  // Empty string for False
+            installmentsInput.value = '';
         }
     }
+
+    // Sync visible inputs with hidden form fields on input change
+    document.getElementById('id_installments').addEventListener('input', function() {
+        // No need to sync since we removed the hidden field
+        console.log('Installments changed to:', this.value);
+    });
 
     // Event listener para cambio de método de pago
     paymentMethodSelect.addEventListener('change', function() {
         const selectedMethod = this.value;
-        
+        console.log('Payment method changed to:', selectedMethod);
+
         if (selectedMethod) {
             loadPaymentTypes(selectedMethod);
             handleCreditFields(selectedMethod);
         } else {
             paymentTypeSelect.style.display = 'none';
-            creditFields.style.display = 'none';
+            installmentsFieldDiv.style.display = 'none';
         }
     });
 

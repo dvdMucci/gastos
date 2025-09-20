@@ -1,0 +1,294 @@
+{
+  "name": "Conversation State Management",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "conversation-state",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "conversation-webhook",
+      "name": "Conversation Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "conversation-state-webhook"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "={{ $json.chatId + '_conversation_state' }}"
+      },
+      "id": "get-conversation-state",
+      "name": "Get Conversation State",
+      "type": "n8n-nodes-base.workflowData",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.data }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "id": "has-existing-state",
+      "name": "Has Existing State?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "action",
+              "value": "={{ $json.action || 'get' }}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $json.chatId }}"
+            },
+            {
+              "name": "stateData",
+              "value": "{}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "initialize-new-state",
+      "name": "Initialize New State",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "action",
+              "value": "={{ $json.action || 'get' }}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $json.chatId }}"
+            },
+            {
+              "name": "stateData",
+              "value": "={{ $node[\"get-conversation-state\"].json.data }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "use-existing-state",
+      "name": "Use Existing State",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $node[\"initialize-new-state\"].json.action || $node[\"use-existing-state\"].json.action }}",
+              "operation": "equal",
+              "value2": "update"
+            }
+          ]
+        }
+      },
+      "id": "is-update-action",
+      "name": "Is Update Action?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $node[\"initialize-new-state\"].json.chatId || $node[\"use-existing-state\"].json.chatId }}_conversation_state",
+        "data": "={{ $json.newStateData }}"
+      },
+      "id": "update-conversation-state",
+      "name": "Update Conversation State",
+      "type": "n8n-nodes-base.workflowData",
+      "typeVersion": 1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ $node[\"initialize-new-state\"].json.chatId || $node[\"use-existing-state\"].json.chatId }}_conversation_state"
+      },
+      "id": "clear-conversation-state",
+      "name": "Clear Conversation State",
+      "type": "n8n-nodes-base.workflowData",
+      "typeVersion": 1,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $node[\"initialize-new-state\"].json.action || $node[\"use-existing-state\"].json.action }}",
+              "operation": "equal",
+              "value2": "clear"
+            }
+          ]
+        }
+      },
+      "id": "is-clear-action",
+      "name": "Is Clear Action?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "responseBody": "={{ $node[\"initialize-new-state\"].json.stateData || $node[\"use-existing-state\"].json.stateData || $node[\"update-conversation-state\"].json.data || '{\"status\": \"cleared\"}' }}",
+        "responseCode": 200,
+        "options": {}
+      },
+      "id": "return-state-response",
+      "name": "Return State Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    }
+  ],
+  "connections": {
+    "conversation-webhook": {
+      "main": [
+        [
+          {
+            "node": "get-conversation-state",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get-conversation-state": {
+      "main": [
+        [
+          {
+            "node": "has-existing-state",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "has-existing-state": {
+      "main": [
+        [
+          {
+            "node": "use-existing-state",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "initialize-new-state",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "initialize-new-state": {
+      "main": [
+        [
+          {
+            "node": "is-update-action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "use-existing-state": {
+      "main": [
+        [
+          {
+            "node": "is-update-action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "is-update-action": {
+      "main": [
+        [
+          {
+            "node": "update-conversation-state",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "is-clear-action",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "update-conversation-state": {
+      "main": [
+        [
+          {
+            "node": "return-state-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "is-clear-action": {
+      "main": [
+        [
+          {
+            "node": "clear-conversation-state",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "return-state-response",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "clear-conversation-state": {
+      "main": [
+        [
+          {
+            "node": "return-state-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null
+}

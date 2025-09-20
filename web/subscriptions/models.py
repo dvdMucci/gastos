@@ -50,6 +50,14 @@ class Subscription(models.Model):
         verbose_name = 'Suscripción'
         verbose_name_plural = 'Suscripciones'
         ordering = ['-start_date']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['user']),
+            models.Index(fields=['status']),
+            models.Index(fields=['category']),
+            models.Index(fields=['payment_method']),
+            models.Index(fields=['payment_type']),
+        ]
     
     def __str__(self):
         return f"{self.name} - ${self.amount} ({self.get_frequency_display()})"

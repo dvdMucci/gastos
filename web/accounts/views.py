@@ -11,8 +11,13 @@ import qrcode
 import io
 import base64
 import pyotp # Necesario para la generación de la URL de configuración, aunque TOTPDevice lo maneja
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 from .models import CustomUser
 from .forms import CustomUserCreationForm, ProfileForm, LoginForm, ChangePasswordForm
+from .serializers import UserSerializer
 
 def login_view(request):
     if request.method == 'POST':
@@ -195,5 +200,28 @@ def change_password(request):
             messages.error(request, 'Por favor, corrige los errores a continuación.')
     else:
         form = ChangePasswordForm(request.user)
-    
+
     return render(request, 'accounts/change_password.html', {'form': form, 'title': 'Cambiar Contraseña'})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def verify_user_by_telegram_chat_id(request):
+    """API endpoint to verify user by telegram_chat_id and return user details"""
+    telegram_chat_id = request.query_params.get('telegram_chat_id')
+
+    if not telegram_chat_id:
+        return Response(
+            {'error': 'telegram_chat_id parameter is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        user = CustomUser.objects.get(telegram_chat_id=telegram_chat_id)
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
+    except CustomUser.DoesNotExist:
+        return Response(
+            {'error': 'User not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )

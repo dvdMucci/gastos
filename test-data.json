@@ -1,0 +1,309 @@
+{
+  "test_cases": [
+    {
+      "name": "Complete expense text message",
+      "description": "Test with a complete expense message in text format",
+      "input": {
+        "update_id": 123456789,
+        "message": {
+          "message_id": 123,
+          "from": {
+            "id": 123456789,
+            "is_bot": false,
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "testuser",
+            "language_code": "es"
+          },
+          "chat": {
+            "id": 123456789,
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "testuser",
+            "type": "private"
+          },
+          "date": 1640995200,
+          "text": "Gasté $1500 en comida ayer con tarjeta visa frances"
+        }
+      },
+      "expected_output": {
+        "expense_created": true,
+        "response_message": "✅ Gasto registrado exitosamente",
+        "expense_data": {
+          "amount": 1500,
+          "name": "comida",
+          "category": "Comida",
+          "payment_method": "credito",
+          "payment_type": "visa_frances_credito",
+          "date": "2021-12-31",
+          "is_credit": false
+        }
+      }
+    },
+    {
+      "name": "Incomplete expense text message",
+      "description": "Test with an incomplete expense message that requires follow-up",
+      "input": {
+        "update_id": 123456790,
+        "message": {
+          "message_id": 124,
+          "from": {
+            "id": 123456789,
+            "is_bot": false,
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "testuser",
+            "language_code": "es"
+          },
+          "chat": {
+            "id": 123456789,
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "testuser",
+            "type": "private"
+          },
+          "date": 1640995200,
+          "text": "Compré algo por $500"
+        }
+      },
+      "expected_output": {
+        "expense_created": false,
+        "response_message": "❓ Información incompleta",
+        "missing_fields": ["name", "category", "payment_method", "date"]
+      }
+    },
+    {
+      "name": "Audio message",
+      "description": "Test with an audio message containing expense information",
+      "input": {
+        "update_id": 123456791,
+        "message": {
+          "message_id": 125,
+          "from": {
+            "id": 123456789,
+            "is_bot": false,
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "testuser",
+            "language_code": "es"
+          },
+          "chat": {
+            "id": 123456789,
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "testuser",
+            "type": "private"
+          },
+          "date": 1640995200,
+          "voice": {
+            "duration": 5,
+            "mime_type": "audio/ogg",
+            "file_id": "voice_file_id_123",
+            "file_unique_id": "unique_voice_123",
+            "file_size": 12345
+          }
+        }
+      },
+      "expected_output": {
+        "audio_processed": true,
+        "transcription": "Gasté 2000 pesos en transporte con efectivo hoy",
+        "expense_created": true,
+        "response_message": "✅ Gasto registrado exitosamente"
+      }
+    },
+    {
+      "name": "Unauthorized user",
+      "description": "Test with a user not registered in the system",
+      "input": {
+        "update_id": 123456792,
+        "message": {
+          "message_id": 126,
+          "from": {
+            "id": 999999999,
+            "is_bot": false,
+            "first_name": "Unknown",
+            "last_name": "User",
+            "username": "unknownuser",
+            "language_code": "es"
+          },
+          "chat": {
+            "id": 999999999,
+            "first_name": "Unknown",
+            "last_name": "User",
+            "username": "unknownuser",
+            "type": "private"
+          },
+          "date": 1640995200,
+          "text": "Gasté $100 en algo"
+        }
+      },
+      "expected_output": {
+        "authorized": false,
+        "response_message": "❌ Error al procesar el gasto: Usuario no autorizado"
+      }
+    },
+    {
+      "name": "Credit expense",
+      "description": "Test with a credit card expense with installments",
+      "input": {
+        "update_id": 123456793,
+        "message": {
+          "message_id": 127,
+          "from": {
+            "id": 123456789,
+            "is_bot": false,
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "testuser",
+            "language_code": "es"
+          },
+          "chat": {
+            "id": 123456789,
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "testuser",
+            "type": "private"
+          },
+          "date": 1640995200,
+          "text": "Compré una notebook por $50000 en 12 cuotas con visa frances"
+        }
+      },
+      "expected_output": {
+        "expense_created": true,
+        "response_message": "✅ Gasto registrado exitosamente",
+        "expense_data": {
+          "amount": 4166.67,
+          "name": "notebook",
+          "category": "Otros",
+          "payment_method": "credito",
+          "payment_type": "visa_frances_credito",
+          "date": "2021-12-31",
+          "is_credit": true,
+          "total_credit_amount": 50000,
+          "installments": 12
+        }
+      }
+    },
+    {
+      "name": "Follow-up message",
+      "description": "Test with a follow-up message to complete previous incomplete expense",
+      "input": {
+        "update_id": 123456794,
+        "message": {
+          "message_id": 128,
+          "from": {
+            "id": 123456789,
+            "is_bot": false,
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "testuser",
+            "language_code": "es"
+          },
+          "chat": {
+            "id": 123456789,
+            "first_name": "Test",
+            "last_name": "User",
+            "username": "testuser",
+            "type": "private"
+          },
+          "date": 1640995200,
+          "text": "Era comida con debito visa macro"
+        }
+      },
+      "expected_output": {
+        "conversation_merged": true,
+        "final_text": "Compré algo por $500 Era comida con debito visa macro",
+        "expense_created": true,
+        "response_message": "✅ Gasto registrado exitosamente"
+      }
+    }
+  ],
+  "mock_responses": {
+    "telegram_get_file": {
+      "ok": true,
+      "result": {
+        "file_id": "voice_file_id_123",
+        "file_unique_id": "unique_voice_123",
+        "file_size": 12345,
+        "file_path": "voice/file_123.ogg"
+      }
+    },
+    "telegram_download_file": {
+      "data": "mock_audio_data_base64"
+    },
+    "openai_transcription": {
+      "text": "Gasté 2000 pesos en transporte con efectivo hoy"
+    },
+    "openai_analysis_complete": {
+      "amount": 2000,
+      "name": "transporte",
+      "category": "Transporte",
+      "payment_method": "efectivo",
+      "payment_type": "efectivo",
+      "date": "2021-12-31",
+      "is_credit": false,
+      "complete": true
+    },
+    "openai_analysis_incomplete": {
+      "amount": 500,
+      "name": "",
+      "category": "",
+      "payment_method": "",
+      "payment_type": "",
+      "date": "",
+      "is_credit": false,
+      "complete": false,
+      "missing_fields": ["name", "category", "payment_method", "date"]
+    },
+    "django_user_check_authorized": {
+      "statusCode": 200,
+      "body": {
+        "id": 1,
+        "username": "testuser",
+        "first_name": "Test",
+        "last_name": "User",
+        "email": "test@example.com",
+        "telegram_chat_id": "123456789",
+        "user_type": "operador"
+      }
+    },
+    "django_user_check_unauthorized": {
+      "statusCode": 404,
+      "body": {
+        "error": "User not found"
+      }
+    },
+    "django_expense_creation": {
+      "statusCode": 201,
+      "body": {
+        "id": 123,
+        "user": 1,
+        "date": "2021-12-31",
+        "name": "comida",
+        "amount": 1500,
+        "category": {
+          "id": 1,
+          "name": "Comida",
+          "icon": "fas fa-utensils",
+          "color": "success"
+        },
+        "payment_method": {
+          "id": 3,
+          "name": "credito"
+        },
+        "payment_type": {
+          "id": 5,
+          "name": "visa_frances_credito",
+          "payment_method": {
+            "id": 3,
+            "name": "credito"
+          }
+        },
+        "description": "",
+        "is_credit": false,
+        "created_at": "2021-12-31T12:00:00Z",
+        "updated_at": "2021-12-31T12:00:00Z"
+      }
+    }
+  }
+}

@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.core.cache import cache
 from datetime import datetime, timedelta
 import calendar
 from finances.models import Category, PaymentMethod, PaymentType
@@ -32,6 +33,7 @@ class ExpenseForecast(models.Model):
         ('biannual', 'Semestral'),
         ('annual', 'Anual'),
         ('variable', 'Variable'),
+        ('one_time', 'Único'),
     ]
     
     CONFIDENCE_CHOICES = [
@@ -45,7 +47,7 @@ class ExpenseForecast(models.Model):
     name = models.CharField(max_length=200, verbose_name="Nombre del gasto")
     description = models.TextField(blank=True, null=True, verbose_name="Descripción")
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Monto estimado")
-    expense_type = models.CharField(max_length=20, choices=EXPENSE_TYPE_CHOICES, verbose_name='Tipo de Gasto')
+    expense_type = models.CharField(max_length=20, choices=EXPENSE_TYPE_CHOICES, default='other', verbose_name='Tipo de Gasto')
     
     # Categoría y método de pago
     category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name="Categoría")
@@ -77,6 +79,15 @@ class ExpenseForecast(models.Model):
         verbose_name = "Estimación de Gasto"
         verbose_name_plural = "Estimaciones de Gastos"
         ordering = ['start_date', 'name']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['user', 'is_automatic_suggestion']),
+            models.Index(fields=['user', 'start_date']),
+            models.Index(fields=['user', 'end_date']),
+            models.Index(fields=['category']),
+            models.Index(fields=['payment_method']),
+            models.Index(fields=['payment_type']),
+        ]
     
     def __str__(self):
         return f"{self.name} - ${self.amount} ({self.get_frequency_display()})"
@@ -275,6 +286,7 @@ class ExpenseForecast(models.Model):
 
 class MonthlyForecast(models.Model):
     """Resumen mensual de estimaciones futuras"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="Usuario")
     month = models.DateField(verbose_name='Mes')
     
     # Datos históricos reales
@@ -295,69 +307,98 @@ class MonthlyForecast(models.Model):
     total_projected = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Total Proyectado')
     
     # Campos de auditoría
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de Creación')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='Última Actualización')
+    created_at = models.DateTimeField(default=timezone.now, verbose_name='Fecha de Creación')
+    updated_at = models.DateTimeField(default=timezone.now, verbose_name='Última Actualización')
     
     class Meta:
         verbose_name = 'Estimación Mensual'
         verbose_name_plural = 'Estimaciones Mensuales'
-        ordering = ['month']
-        unique_together = ['month']
+        ordering = ['user', 'month']
+        unique_together = ['user', 'month']
+        indexes = [
+            models.Index(fields=['user', 'month']),
+            models.Index(fields=['user']),
+            models.Index(fields=['month']),
+        ]
     
     def __str__(self):
         return f"{self.month.strftime('%B %Y')} - ${self.total_projected:.2f}"
     
     @classmethod
-    def generate_forecasts(cls, months_back=6, months_forward=12):
+    def generate_forecasts(cls, user, months_back=6, months_forward=12):
         """Generar estimaciones para los meses especificados"""
         from finances.models import Expense
         from subscriptions.models import Subscription
         from .models import ExpenseForecast
-        
+
+        # Create cache key based on user and parameters
+        cache_key = f"forecasts_{user.id}_{months_back}_{months_forward}"
+        cached_result = None
+        try:
+            cached_result = cache.get(cache_key)
+        except Exception as e:
+            # Log the error but continue without cache
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Cache get failed for key {cache_key}: {e}")
+
+        if cached_result is not None:
+            return cached_result
+
         today = timezone.now().date()
         current_month = today.replace(day=1)
-        
+
         # Generar estimaciones para meses pasados, actual y futuros
         for i in range(-months_back, months_forward + 1):
             if i < 0:
                 # Meses pasados
                 month_date = current_month + timedelta(days=30*i)
-                cls._generate_historical_month(month_date)
+                cls._generate_historical_month(user, month_date)
             elif i == 0:
                 # Mes actual
-                cls._generate_current_month(current_month)
+                cls._generate_current_month(user, current_month)
             else:
                 # Meses futuros
                 month_date = current_month + timedelta(days=30*i)
-                cls._generate_future_month(month_date)
+                cls._generate_future_month(user, month_date)
+
+        # Cache the result for 10 minutes
+        try:
+            cache.set(cache_key, True, 600)
+        except Exception as e:
+            # Log the error but continue without caching
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Cache set failed for key {cache_key}: {e}")
     
     @classmethod
-    def _generate_historical_month(cls, month_date):
+    def _generate_historical_month(cls, user, month_date):
         """Generar datos para un mes histórico"""
         from finances.models import Expense
         from subscriptions.models import Subscription
-        
+
         # Obtener gastos reales del mes
         start_date = month_date
         if month_date.month == 12:
             end_date = month_date.replace(year=month_date.year + 1, month=1) - timedelta(days=1)
         else:
             end_date = month_date.replace(month=month_date.month + 1) - timedelta(days=1)
-        
-        expenses = Expense.objects.filter(date__range=[start_date, end_date])
-        
+
+        expenses = Expense.objects.filter(user=user, date__range=[start_date, end_date])
+
         # Calcular totales por tipo
         subscriptions_total = expenses.filter(subscription__isnull=False).aggregate(
             total=models.Sum('amount'))['total'] or 0
         credits_total = expenses.filter(is_credit=True).aggregate(
             total=models.Sum('amount'))['total'] or 0
         other_total = expenses.filter(
-            is_credit=False, 
+            is_credit=False,
             subscription__isnull=True
         ).aggregate(total=models.Sum('amount'))['total'] or 0
-        
+
         # Crear o actualizar el registro
         forecast, created = cls.objects.get_or_create(
+            user=user,
             month=month_date,
             defaults={
                 'actual_subscriptions': subscriptions_total,
@@ -366,7 +407,7 @@ class MonthlyForecast(models.Model):
                 'total_projected': subscriptions_total + credits_total + other_total
             }
         )
-        
+
         if not created:
             forecast.actual_subscriptions = subscriptions_total
             forecast.actual_credits = credits_total
@@ -375,31 +416,33 @@ class MonthlyForecast(models.Model):
             forecast.save()
     
     @classmethod
-    def _generate_current_month(cls, month_date):
+    def _generate_current_month(cls, user, month_date):
         """Generar datos para el mes actual"""
         from finances.models import Expense
         from subscriptions.models import Subscription
         from .models import ExpenseForecast
-        
+
         today = timezone.now().date()
         start_date = month_date
         if month_date.month == 12:
             end_date = month_date.replace(year=month_date.year + 1, month=1) - timedelta(days=1)
         else:
             end_date = month_date.replace(month=month_date.month + 1) - timedelta(days=1)
-        
+
         # Gastos reales hasta hoy
         actual_expenses = Expense.objects.filter(
+            user=user,
             date__range=[start_date, today]
         )
         actual_total = actual_expenses.aggregate(
             total=models.Sum('amount'))['total'] or 0
-        
+
         # Estimación para el mes completo
-        estimated_total = cls._calculate_monthly_estimate(month_date)
-        
+        estimated_total = cls._calculate_monthly_estimate(user, month_date)
+
         # Crear o actualizar el registro
         forecast, created = cls.objects.get_or_create(
+            user=user,
             month=month_date,
             defaults={
                 'current_month_estimated': estimated_total,
@@ -407,7 +450,7 @@ class MonthlyForecast(models.Model):
                 'total_projected': estimated_total
             }
         )
-        
+
         if not created:
             forecast.current_month_estimated = estimated_total
             forecast.current_month_actual = actual_total
@@ -415,33 +458,35 @@ class MonthlyForecast(models.Model):
             forecast.save()
     
     @classmethod
-    def _generate_future_month(cls, month_date):
+    def _generate_future_month(cls, user, month_date):
         """Generar datos para un mes futuro"""
         from finances.models import Expense
         from subscriptions.models import Subscription
         from .models import ExpenseForecast
-        
+
         # Proyecciones de suscripciones
-        subscriptions = Subscription.objects.filter(status='active')
+        subscriptions = Subscription.objects.filter(user=user, status='active')
         subscriptions_total = sum(sub.get_monthly_amount() for sub in subscriptions)
-        
+
         # Proyecciones de créditos
         credits = Expense.objects.filter(
+            user=user,
             is_credit=True,
             date__year=month_date.year,
             date__month=month_date.month
         )
         credits_total = credits.aggregate(
             total=models.Sum('amount'))['total'] or 0
-        
+
         # Proyecciones de estimaciones activas
-        estimates = ExpenseForecast.objects.filter(is_active=True)
+        estimates = ExpenseForecast.objects.filter(user=user, is_active=True)
         estimates_total = sum(est.get_monthly_amount() for est in estimates)
-        
+
         total_projected = subscriptions_total + credits_total + estimates_total
-        
+
         # Crear o actualizar el registro
         forecast, created = cls.objects.get_or_create(
+            user=user,
             month=month_date,
             defaults={
                 'projected_subscriptions': subscriptions_total,
@@ -450,7 +495,7 @@ class MonthlyForecast(models.Model):
                 'total_projected': total_projected
             }
         )
-        
+
         if not created:
             forecast.projected_subscriptions = subscriptions_total
             forecast.projected_credits = credits_total
@@ -459,29 +504,30 @@ class MonthlyForecast(models.Model):
             forecast.save()
     
     @classmethod
-    def _calculate_monthly_estimate(cls, month_date):
+    def _calculate_monthly_estimate(cls, user, month_date):
         """Calcular estimación mensual basada en suscripciones, créditos y estimaciones activas"""
         from subscriptions.models import Subscription
         from .models import ExpenseForecast
-        
+
         # Suscripciones activas
-        subscriptions = Subscription.objects.filter(status='active')
+        subscriptions = Subscription.objects.filter(user=user, status='active')
         subscriptions_total = sum(sub.get_monthly_amount() for sub in subscriptions)
-        
+
         # Créditos del mes
         from finances.models import Expense
         credits = Expense.objects.filter(
+            user=user,
             is_credit=True,
             date__year=month_date.year,
             date__month=month_date.month
         )
         credits_total = credits.aggregate(
             total=models.Sum('amount'))['total'] or 0
-        
+
         # Estimaciones activas
-        estimates = ExpenseForecast.objects.filter(is_active=True)
+        estimates = ExpenseForecast.objects.filter(user=user, is_active=True)
         estimates_total = sum(est.get_monthly_amount() for est in estimates)
-        
+
         return subscriptions_total + credits_total + estimates_total
     
     def get_total_actual(self):

@@ -8,9 +8,24 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 import calendar
 import uuid
+from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import OrderingFilter
 from .models import Expense, Category, PaymentMethod, PaymentType, MonthlySummary
 from .forms import ExpenseForm, ExpenseFilterForm
+from .serializers import ExpenseSerializer, CategorySerializer, PaymentMethodSerializer, PaymentTypeSerializer
 from accounts.models import CustomUser
+
+def get_first_monday(year, month):
+    """Calculate the first Monday of a given month, handling special case when 1st is Monday"""
+    first_day = datetime(year, month, 1).date()
+    if first_day.weekday() == 0:  # Monday
+        return first_day + timedelta(days=7)  # Next Monday (8th)
+    else:
+        days_to_monday = (7 - first_day.weekday()) % 7
+        return first_day + timedelta(days=days_to_monday)
 
 @login_required
 def expense_list(request):
@@ -132,44 +147,78 @@ def expense_list(request):
 def expense_create(request):
     """Crear un nuevo gasto"""
     if request.method == 'POST':
+        print(f"DEBUG: POST data received: {request.POST}")
         form = ExpenseForm(request.POST)
+        print(f"DEBUG: Form is valid: {form.is_valid()}")
+        if not form.is_valid():
+            print(f"DEBUG: Form errors: {form.errors}")
+            print(f"DEBUG: Non-field errors: {form.non_field_errors()}")
+
         if form.is_valid():
+            print(f"DEBUG: Form cleaned data: {form.cleaned_data}")
             expense = form.save(commit=False)
             expense.user = request.user
             
             # Manejar lógica de crédito
             if expense.payment_method.name == 'credito':
+                # Get installments from POST data since we're using a custom input field
+                installments_str = request.POST.get('installments', '1')
+                try:
+                    installments = int(installments_str)
+                except (ValueError, TypeError):
+                    installments = 1
+
+                print(f"DEBUG: Processing credit expense - total_amount: {expense.amount}, installments: {installments}")
                 expense.is_credit = True
-                expense.total_credit_amount = form.cleaned_data.get('total_credit_amount', 0)
-                expense.installments = form.cleaned_data.get('installments', 1)
+                expense.total_credit_amount = expense.amount  # Use the entered amount as total credit amount
+                expense.installments = installments
                 expense.current_installment = 0
                 expense.remaining_amount = expense.total_credit_amount
-                
+                # Cuota 0/N has amount = 0
+                expense.amount = 0
+                # Update name and description for Cuota 0/N
+                original_name = expense.name
+                expense.name = f"{original_name} - Cuota 0/{installments}"
+                expense.description = f"Monto total={expense.total_credit_amount} Cantidad de cuotas={installments}"
+
                 # Crear grupo de crédito
                 import uuid
                 credit_group_id = str(uuid.uuid4())
                 expense.credit_group_id = credit_group_id
-                
-                # Guardar el gasto principal
+
+                # Guardar Cuota 0/N
                 expense.save()
-                
-                # Crear cuotas futuras
-                if expense.installments > 1:
+                print(f"DEBUG: Saved Cuota 0/{installments} with amount 0 on {expense.date}")
+
+                # Crear cuotas futuras (1/N to N/N)
+                if expense.installments >= 1:
                     amount_per_installment = expense.total_credit_amount / expense.installments
-                    current_date = expense.date
-                    
+                    print(f"DEBUG: Creating {expense.installments} installments of {amount_per_installment} each")
+
+                    # Start from the next month
+                    start_year = expense.date.year
+                    start_month = expense.date.month + 1
+                    if start_month > 12:
+                        start_month = 1
+                        start_year += 1
+
                     for i in range(1, expense.installments + 1):
-                        # Calcular fecha de la siguiente cuota
-                        if current_date.month == 12:
-                            next_date = current_date.replace(year=current_date.year + 1, month=1)
-                        else:
-                            next_date = current_date.replace(month=current_date.month + 1)
-                        
+                        # Calculate the month for this installment
+                        installment_month = start_month + (i - 1)
+                        installment_year = start_year
+                        while installment_month > 12:
+                            installment_month -= 12
+                            installment_year += 1
+
+                        # Get first Monday of that month
+                        installment_date = get_first_monday(installment_year, installment_month)
+                        print(f"DEBUG: Calculated first Monday for installment {i}: {installment_date} (month: {installment_month}/{installment_year})")
+
                         # Crear cuota
                         installment_expense = Expense.objects.create(
                             user=request.user,
-                            date=next_date,
-                            name=f"{expense.name} - Cuota {i}",
+                            date=installment_date,
+                            name=f"{original_name} - Cuota {i}/{installments}",
                             amount=amount_per_installment,
                             category=expense.category,
                             payment_method=expense.payment_method,
@@ -182,10 +231,9 @@ def expense_create(request):
                             remaining_amount=expense.total_credit_amount - (amount_per_installment * i),
                             credit_group_id=credit_group_id
                         )
-                        
-                        current_date = next_date
-                
-                messages.success(request, f'Gasto a crédito creado exitosamente. Se crearon {expense.installments} cuotas.')
+                        print(f"DEBUG: Created installment {i}/{installments} for {installment_date} with amount {amount_per_installment}")
+
+                messages.success(request, f'Gasto a crédito creado exitosamente. Se crearon {expense.installments + 1} cuotas (0/{expense.installments} + {expense.installments} cuotas).')
             else:
                 expense.is_credit = False
                 expense.save()
@@ -223,6 +271,9 @@ def expense_edit(request, pk):
                 expense.is_credit = True
                 expense.total_credit_amount = form.cleaned_data.get('total_credit_amount', 0)
                 expense.installments = form.cleaned_data.get('installments', 1)
+                # Calculate the amount for the first installment if this is the first installment
+                if expense.current_installment == 0:
+                    expense.amount = expense.total_credit_amount / expense.installments
                 
                 # Si es un gasto a crédito existente y cambió algo importante
                 if old_is_credit and old_credit_group_id:
@@ -234,22 +285,39 @@ def expense_edit(request, pk):
                         Expense.objects.filter(credit_group_id=old_credit_group_id).exclude(pk=expense.pk).delete()
                         
                         # Crear nuevas cuotas
-                        if expense.installments > 1:
+                        if expense.installments >= 1:
                             amount_per_installment = expense.total_credit_amount / expense.installments
-                            current_date = expense.date
-                            
+                            # Update Cuota 0/N
+                            expense.amount = 0
+                            original_name = expense.name.split(' - Cuota 0/')[0]  # Extract original name
+                            expense.name = f"{original_name} - Cuota 0/{expense.installments}"
+                            expense.description = f"Monto total={expense.total_credit_amount} Cantidad de cuotas={expense.installments}"
+                            expense.save()
+
+                            # Start from the next month
+                            start_year = expense.date.year
+                            start_month = expense.date.month + 1
+                            if start_month > 12:
+                                start_month = 1
+                                start_year += 1
+
                             for i in range(1, expense.installments + 1):
-                                # Calcular fecha de la siguiente cuota
-                                if current_date.month == 12:
-                                    next_date = current_date.replace(year=current_date.year + 1, month=1)
-                                else:
-                                    next_date = current_date.replace(month=current_date.month + 1)
-                                
+                                # Calculate the month for this installment
+                                installment_month = start_month + (i - 1)
+                                installment_year = start_year
+                                while installment_month > 12:
+                                    installment_month -= 12
+                                    installment_year += 1
+
+                                # Get first Monday of that month
+                                installment_date = get_first_monday(installment_year, installment_month)
+                                print(f"DEBUG: Recreated first Monday for installment {i}: {installment_date}")
+
                                 # Crear cuota
                                 installment_expense = Expense.objects.create(
                                     user=request.user,
-                                    date=next_date,
-                                    name=f"{expense.name} - Cuota {i}",
+                                    date=installment_date,
+                                    name=f"{original_name} - Cuota {i}/{expense.installments}",
                                     amount=amount_per_installment,
                                     category=expense.category,
                                     payment_method=expense.payment_method,
@@ -262,10 +330,9 @@ def expense_edit(request, pk):
                                     remaining_amount=expense.total_credit_amount - (amount_per_installment * i),
                                     credit_group_id=old_credit_group_id
                                 )
-                                
-                                current_date = next_date
+                                print(f"DEBUG: Recreated installment {i}/{expense.installments} for {installment_date}")
                         
-                        messages.success(request, f'Gasto a crédito actualizado. Se recrearon {expense.installments} cuotas.')
+                        messages.success(request, f'Gasto a crédito actualizado. Se recrearon {expense.installments + 1} cuotas (0/{expense.installments} + {expense.installments} cuotas).')
                     else:
                         # Solo actualizar campos básicos
                         expense.save()
@@ -277,25 +344,43 @@ def expense_edit(request, pk):
                     expense.credit_group_id = credit_group_id
                     expense.current_installment = 0
                     expense.remaining_amount = expense.total_credit_amount
+                    # Cuota 0/N has amount = 0
+                    expense.amount = 0
+                    # Update name and description for Cuota 0/N
+                    original_name = expense.name
+                    expense.name = f"{original_name} - Cuota 0/{expense.installments}"
+                    expense.description = f"Monto total={expense.total_credit_amount} Cantidad de cuotas={expense.installments}"
                     expense.save()
-                    
-                    # Crear cuotas futuras
-                    if expense.installments > 1:
+
+                    # Crear cuotas futuras (1/N to N/N)
+                    if expense.installments >= 1:
                         amount_per_installment = expense.total_credit_amount / expense.installments
-                        current_date = expense.date
-                        
+                        print(f"DEBUG: Creating {expense.installments} installments of {amount_per_installment} each")
+
+                        # Start from the next month
+                        start_year = expense.date.year
+                        start_month = expense.date.month + 1
+                        if start_month > 12:
+                            start_month = 1
+                            start_year += 1
+
                         for i in range(1, expense.installments + 1):
-                            # Calcular fecha de la siguiente cuota
-                            if current_date.month == 12:
-                                next_date = current_date.replace(year=current_date.year + 1, month=1)
-                            else:
-                                next_date = current_date.replace(month=current_date.month + 1)
-                            
+                            # Calculate the month for this installment
+                            installment_month = start_month + (i - 1)
+                            installment_year = start_year
+                            while installment_month > 12:
+                                installment_month -= 12
+                                installment_year += 1
+
+                            # Get first Monday of that month
+                            installment_date = get_first_monday(installment_year, installment_month)
+                            print(f"DEBUG: Calculated first Monday for installment {i}: {installment_date}")
+
                             # Crear cuota
                             installment_expense = Expense.objects.create(
                                 user=request.user,
-                                date=next_date,
-                                name=f"{expense.name} - Cuota {i}",
+                                date=installment_date,
+                                name=f"{original_name} - Cuota {i}/{expense.installments}",
                                 amount=amount_per_installment,
                                 category=expense.category,
                                 payment_method=expense.payment_method,
@@ -308,10 +393,9 @@ def expense_edit(request, pk):
                                 remaining_amount=expense.total_credit_amount - (amount_per_installment * i),
                                 credit_group_id=credit_group_id
                             )
-                            
-                            current_date = next_date
-                        
-                        messages.success(request, f'Gasto a crédito creado exitosamente. Se crearon {expense.installments} cuotas.')
+                            print(f"DEBUG: Created installment {i}/{expense.installments} for {installment_date}")
+
+                        messages.success(request, f'Gasto a crédito creado exitosamente. Se crearon {expense.installments + 1} cuotas (0/{expense.installments} + {expense.installments} cuotas).')
             else:
                 # No es crédito
                 expense.is_credit = False
@@ -519,13 +603,103 @@ def export_expenses(request):
 
 def get_payment_types(request):
     """Vista AJAX para obtener tipos de pago según el método seleccionado"""
-    payment_method_id = request.GET.get('payment_method')
-    if payment_method_id:
+    payment_method_param = request.GET.get('payment_method')
+    if payment_method_param:
+        # Filter by payment_method id (since form now uses pk)
         payment_types = PaymentType.objects.filter(
-            payment_method_id=payment_method_id
+            payment_method_id=payment_method_param
         ).order_by('-is_default', 'name')
-        
+
         data = [{'id': pt.id, 'name': pt.get_name_display(), 'is_default': pt.is_default} for pt in payment_types]
-        return JsonResponse(data, safe=False)
-    
-    return JsonResponse([], safe=False)
+        return JsonResponse({'payment_types': data}, safe=False)
+
+    return JsonResponse({'payment_types': []}, safe=False)
+
+
+class IsOwnerOrReadOnly(permissions.BasePermission):
+    """
+    Custom permission to only allow owners of an object to edit it.
+    """
+    def has_object_permission(self, request, view, obj):
+        # Read permissions are allowed to any request,
+        # so we'll always allow GET, HEAD or OPTIONS requests.
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        # Write permissions are only allowed to the owner of the expense.
+        return obj.user == request.user
+
+
+class ExpenseViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Expense model with filtering and user ownership permissions.
+    """
+    serializer_class = ExpenseSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['user', 'date', 'category', 'payment_method', 'payment_type', 'is_credit']
+    ordering_fields = ['date', 'amount', 'created_at']
+    ordering = ['-date']
+
+    def get_queryset(self):
+        """
+        Filter queryset to only show expenses for the authenticated user,
+        unless user_id is specified in query params (for admin access).
+        """
+        queryset = Expense.objects.all()
+
+        # Filter by user - authenticated user can only see their own expenses
+        # unless they specify user_id in query params
+        user_id = self.request.query_params.get('user_id')
+        if user_id:
+            # Allow filtering by specific user_id if provided
+            queryset = queryset.filter(user_id=user_id)
+        else:
+            # Default: only show authenticated user's expenses
+            queryset = queryset.filter(user=self.request.user)
+
+        # Date range filtering
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        """
+        Set the user to the authenticated user when creating expenses.
+        """
+        serializer.save(user=self.request.user)
+
+
+class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only ViewSet for Category model.
+    """
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class PaymentMethodViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only ViewSet for PaymentMethod model.
+    """
+    queryset = PaymentMethod.objects.all()
+    serializer_class = PaymentMethodSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class PaymentTypeViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only ViewSet for PaymentType model.
+    """
+    queryset = PaymentType.objects.all()
+    serializer_class = PaymentTypeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['payment_method']

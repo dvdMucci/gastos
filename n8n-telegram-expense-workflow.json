@@ -1,0 +1,922 @@
+{
+  "name": "Telegram Expense Bot Integration",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telegram-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "telegram-webhook-trigger",
+      "name": "Telegram Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "telegram-expense-webhook"
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "isAuthorized",
+              "value": false
+            }
+          ],
+          "string": [
+            {
+              "name": "userId",
+              "value": ""
+            },
+            {
+              "name": "username",
+              "value": ""
+            },
+            {
+              "name": "errorMessage",
+              "value": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "initialize-variables",
+      "name": "Initialize Variables",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.body.message?.from?.id ? 'https://your-django-api.com/accounts/verify_user_by_telegram_chat_id/?telegram_chat_id=' + $json.body.message.from.id : '' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer your-django-api-token"
+            }
+          ]
+        },
+        "sendBody": false,
+        "options": {}
+      },
+      "id": "user-authorization-check",
+      "name": "User Authorization Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": "200"
+            }
+          ]
+        }
+      },
+      "id": "user-authorized-check",
+      "name": "User Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "isAuthorized",
+              "value": true
+            }
+          ],
+          "string": [
+            {
+              "name": "userId",
+              "value": "={{ $json.body.id }}"
+            },
+            {
+              "name": "username",
+              "value": "={{ $json.body.username }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-authorized-user",
+      "name": "Set Authorized User",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1120, 120]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "errorMessage",
+              "value": "Usuario no autorizado. Por favor, contacte al administrador."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-unauthorized-error",
+      "name": "Set Unauthorized Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1120, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $node[\"initialize-variables\"].json.isAuthorized }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "authorized-continue-check",
+      "name": "Authorized to Continue?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "messageType",
+              "value": "={{ $json.body.message?.voice ? 'audio' : ($json.body.message?.text ? 'text' : 'unknown') }}"
+            },
+            {
+              "name": "messageText",
+              "value": "={{ $json.body.message?.text || '' }}"
+            },
+            {
+              "name": "audioFileId",
+              "value": "={{ $json.body.message?.voice?.file_id || '' }}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $json.body.message?.chat?.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "message-type-detection",
+      "name": "Message Type Detection",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $node[\"message-type-detection\"].json.messageType }}",
+              "operation": "equal",
+              "value2": "audio"
+            }
+          ]
+        }
+      },
+      "id": "is-audio-message",
+      "name": "Is Audio Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1780, 100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.telegram.org/bot{{ $node[\"telegram-webhook-trigger\"].parameter.botToken }}/getFile",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file_id",
+              "value": "={{ $node[\"message-type-detection\"].json.audioFileId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-telegram-audio-file",
+      "name": "Get Telegram Audio File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2000, 20]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.telegram.org/file/bot{{ $node[\"telegram-webhook-trigger\"].parameter.botToken }}/{{ $json.body.result.file_path }}",
+        "sendBody": false,
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "download-audio-file",
+      "name": "Download Audio File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2220, 20]
+    },
+    {
+      "parameters": {
+        "model": "whisper-1",
+        "options": {
+          "responseFormat": "json"
+        }
+      },
+      "id": "openai-transcription",
+      "name": "OpenAI Transcription",
+      "type": "@n8n/n8n-nodes-langchain.openai",
+      "typeVersion": 1,
+      "position": [2440, 20],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credentials",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "transcribedText",
+              "value": "={{ $json.text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-transcribed-text",
+      "name": "Set Transcribed Text",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [2660, 20]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "finalText",
+              "value": "={{ $node[\"message-type-detection\"].json.messageText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-text-message",
+      "name": "Set Text Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [2000, 180]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "finalText",
+              "value": "={{ $node[\"merge-with-existing\"].json.mergedText || $node[\"set-transcribed-text\"].json.transcribedText || $node[\"set-text-message\"].json.finalText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "merge-text-sources",
+      "name": "Merge Text Sources",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [2440, 180]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Eres un asistente especializado en analizar mensajes sobre gastos. Extrae información de gastos de manera estructurada. Si la información está incompleta, indica qué campos faltan.\n\nCampos requeridos:\n- amount: monto numérico\n- name: nombre/descripción del gasto\n- category: categoría (debe ser una de las existentes)\n- payment_method: método de pago\n- payment_type: tipo específico de pago\n- date: fecha del gasto (formato YYYY-MM-DD)\n- is_credit: si es un gasto a crédito (true/false)\n- installments: número de cuotas (solo si is_credit=true)\n\nCategorías disponibles: Comida, Transporte, Entretenimiento, Salud, Educación, Servicios, Otros\n\nMétodos de pago: efectivo, debito, transferencia, credito\n\nTipos de pago dependen del método:\n- efectivo: efectivo\n- debito: mercado_pago, visa_frances, visa_bapro, visa_macro, cuenta_dni\n- transferencia: transferencia_mp, transferencia_frances, transferencia_macro, transferencia_bapro, transferencia_cuenta_dni\n- credito: mastercard_frances, visa_frances_credito, visa_bapro_credito, mercado_pago_credito\n\nResponde en formato JSON con los campos extraídos y un campo 'complete' que indique si toda la información necesaria está presente."
+          },
+          {
+            "role": "user",
+            "content": "={{ $node[\"merge-text-sources\"].json.finalText }}"
+          }
+        ],
+        "options": {
+          "responseFormat": "json"
+        }
+      },
+      "id": "openai-expense-analysis",
+      "name": "OpenAI Expense Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openai",
+      "typeVersion": 1,
+      "position": [2660, 180],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credentials",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.complete }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "expense-data-complete",
+      "name": "Expense Data Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2880, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-django-api.com/api/expenses/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer your-django-api-token"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "date",
+              "value": "={{ $json.date }}"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "name": "amount",
+              "value": "={{ $json.amount }}"
+            },
+            {
+              "name": "category",
+              "value": "={{ $json.category }}"
+            },
+            {
+              "name": "payment_method",
+              "value": "={{ $json.payment_method }}"
+            },
+            {
+              "name": "payment_type",
+              "value": "={{ $json.payment_type }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $json.description || '' }}"
+            },
+            {
+              "name": "is_credit",
+              "value": "={{ $json.is_credit }}"
+            },
+            {
+              "name": "total_credit_amount",
+              "value": "={{ $json.is_credit ? $json.amount : null }}"
+            },
+            {
+              "name": "installments",
+              "value": "={{ $json.is_credit ? $json.installments : null }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-expense-django",
+      "name": "Create Expense in Django",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3100, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{ $node[\"telegram-webhook-trigger\"].parameter.botToken }}/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $node[\"message-type-detection\"].json.chatId }}"
+            },
+            {
+              "name": "text",
+              "value": "✅ Gasto registrado exitosamente:\n\n📅 Fecha: {{ $json.date }}\n📝 Descripción: {{ $json.name }}\n💰 Monto: ${{ $json.amount }}\n🏷️ Categoría: {{ $json.category }}\n💳 Método: {{ $json.payment_method }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-success-telegram",
+      "name": "Send Success to Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3320, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{ $node[\"telegram-webhook-trigger\"].parameter.botToken }}/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $node[\"message-type-detection\"].json.chatId }}"
+            },
+            {
+              "name": "text",
+              "value": "❓ Información incompleta. Por favor proporcione:\n\n{{ $json.missing_fields.join('\\n') }}\n\nMensaje original: {{ $node[\"merge-text-sources\"].json.finalText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-followup-telegram",
+      "name": "Send Follow-up to Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3100, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{ $node[\"telegram-webhook-trigger\"].parameter.botToken }}/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $node[\"message-type-detection\"].json.chatId }}"
+            },
+            {
+              "name": "text",
+              "value": "❌ Error al procesar el gasto: {{ $node[\"set-unauthorized-error\"].json.errorMessage || 'Error desconocido' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-error-telegram",
+      "name": "Send Error to Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/conversation-state",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "update"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $node[\"message-type-detection\"].json.chatId }}"
+            },
+            {
+              "name": "newStateData",
+              "value": "={{ JSON.stringify({ 'incomplete_expense': $json, 'original_message': $node[\"merge-text-sources\"].json.finalText, 'missing_fields': $json.missing_fields, 'timestamp': new Date().toISOString() }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "store-incomplete-expense",
+      "name": "Store Incomplete Expense",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3320, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/conversation-state",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "get"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $node[\"message-type-detection\"].json.chatId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-existing-conversation",
+      "name": "Check Existing Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.incomplete_expense }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "has-incomplete-expense",
+      "name": "Has Incomplete Expense?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "mergedText",
+              "value": "={{ $json.incomplete_expense.original_message + ' ' + $node[\"merge-text-sources\"].json.finalText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "merge-with-existing",
+      "name": "Merge with Existing",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/conversation-state",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "clear"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $node[\"message-type-detection\"].json.chatId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "clear-conversation-after-success",
+      "name": "Clear Conversation After Success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3540, 100]
+    }
+  ],
+  "connections": {
+    "telegram-webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "initialize-variables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "initialize-variables": {
+      "main": [
+        [
+          {
+            "node": "user-authorization-check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "user-authorization-check": {
+      "main": [
+        [
+          {
+            "node": "user-authorized-check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "user-authorized-check": {
+      "main": [
+        [
+          {
+            "node": "set-authorized-user",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "set-unauthorized-error",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "set-authorized-user": {
+      "main": [
+        [
+          {
+            "node": "authorized-continue-check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set-unauthorized-error": {
+      "main": [
+        [
+          {
+            "node": "authorized-continue-check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "authorized-continue-check": {
+      "main": [
+        [
+          {
+            "node": "message-type-detection",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "send-error-telegram",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "message-type-detection": {
+      "main": [
+        [
+          {
+            "node": "check-existing-conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-existing-conversation": {
+      "main": [
+        [
+          {
+            "node": "has-incomplete-expense",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "has-incomplete-expense": {
+      "main": [
+        [
+          {
+            "node": "merge-with-existing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "is-audio-message",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "merge-with-existing": {
+      "main": [
+        [
+          {
+            "node": "openai-expense-analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "is-audio-message": {
+      "main": [
+        [
+          {
+            "node": "get-telegram-audio-file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "set-text-message",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "get-telegram-audio-file": {
+      "main": [
+        [
+          {
+            "node": "download-audio-file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "download-audio-file": {
+      "main": [
+        [
+          {
+            "node": "openai-transcription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "openai-transcription": {
+      "main": [
+        [
+          {
+            "node": "set-transcribed-text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set-transcribed-text": {
+      "main": [
+        [
+          {
+            "node": "merge-text-sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set-text-message": {
+      "main": [
+        [
+          {
+            "node": "merge-text-sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "merge-text-sources": {
+      "main": [
+        [
+          {
+            "node": "openai-expense-analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "openai-expense-analysis": {
+      "main": [
+        [
+          {
+            "node": "expense-data-complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "expense-data-complete": {
+      "main": [
+        [
+          {
+            "node": "create-expense-django",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "send-followup-telegram",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "create-expense-django": {
+      "main": [
+        [
+          {
+            "node": "send-success-telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send-success-telegram": {
+      "main": [
+        [
+          {
+            "node": "clear-conversation-after-success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send-followup-telegram": {
+      "main": [
+        [
+          {
+            "node": "store-incomplete-expense",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "store-incomplete-expense": {
+      "main": [
+        []
+      ]
+    },
+    "clear-conversation-after-success": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null
+}

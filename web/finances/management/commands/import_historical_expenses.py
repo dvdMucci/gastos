@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import calendar
 import openpyxl
 import os
+import uuid
 from finances.models import Expense, Category, PaymentMethod, PaymentType
 
 class Command(BaseCommand):
@@ -27,14 +28,14 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         file_path = options['file']
         username = options['user']
-        
+
         # Verificar que el archivo existe
         if not os.path.exists(file_path):
             self.stdout.write(
                 self.style.ERROR(f'❌ Archivo no encontrado: {file_path}')
             )
             return
-        
+
         # Obtener usuario
         User = get_user_model()
         try:
@@ -44,9 +45,9 @@ class Command(BaseCommand):
                 self.style.ERROR(f'❌ Usuario no encontrado: {username}')
             )
             return
-        
+
         self.stdout.write(f'🔄 Importando gastos para usuario: {user.username}')
-        
+
         # Cargar el archivo Excel
         try:
             workbook = openpyxl.load_workbook(file_path, data_only=True)
@@ -55,14 +56,14 @@ class Command(BaseCommand):
                 self.style.ERROR(f'❌ Error al abrir archivo Excel: {e}')
             )
             return
-        
+
         # Mapeo de tipos de pago
         payment_type_mapping = {
             'crédito': 'credito',
-            'débito': 'debito', 
+            'débito': 'debito',
             'efectivo': 'efectivo'
         }
-        
+
         # Mapeo inteligente de categorías
         category_mapping = {
             # Alimentos
@@ -87,7 +88,7 @@ class Command(BaseCommand):
             'jarabe': 'Medicamentos',
             'medicamento': 'Medicamentos',
             'medicina': 'Medicamentos',
-            
+
             # Transporte
             'combustible': 'Combustible',
             'nafta': 'Combustible',
@@ -96,7 +97,7 @@ class Command(BaseCommand):
             'kangoo': 'Mantenimiento Auto',
             'auto': 'Mantenimiento Auto',
             'coche': 'Mantenimiento Auto',
-            
+
             # Entretenimiento
             'salida': 'Salidas',
             'birreria': 'Salidas',
@@ -108,7 +109,7 @@ class Command(BaseCommand):
             'libro': 'Libros',
             'ingles': 'Cursos',
             'idioma': 'Cursos',
-            
+
             # Hogar
             'aire': 'Electrodomésticos',
             'microondas': 'Electrodomésticos',
@@ -119,7 +120,7 @@ class Command(BaseCommand):
             'red power': 'Electrónica',
             'turbo': 'Electrodomésticos',
             'ventilator': 'Electrodomésticos',
-            
+
             # Ropa
             'ropa': 'Otros',
             'zapatillas': 'Otros',
@@ -129,122 +130,96 @@ class Command(BaseCommand):
             'escolar': 'Material Escolar',
             'colegio': 'Material Escolar',
         }
-        
+
         total_imported = 0
         total_credits = 0
-        
+
         # Procesar cada hoja (mes)
         for sheet_name in workbook.sheetnames:
             if sheet_name.lower() in ['hoja1', 'sheet1', 'datos']:
                 continue  # Saltar hojas genéricas
-                
+
             self.stdout.write(f'📅 Procesando mes: {sheet_name}')
             sheet = workbook[sheet_name]
-            
+
             # Buscar encabezados
             headers = []
             header_row = None
-            
+
             for row_num, row in enumerate(sheet.iter_rows(values_only=True), 1):
                 if row and any(cell for cell in row if cell and 'fecha' in str(cell).lower()):
                     headers = [str(cell).lower().strip() if cell else '' for cell in row]
                     header_row = row_num
                     break
-            
+
             if not headers:
                 self.stdout.write(f'  ⚠️  No se encontraron encabezados en {sheet_name}')
                 continue
-            
-            # Mapear columnas
+
+            # Mapear columnas con sinónimos (MEJORA: Detección flexible de encabezados)
+            col_synonyms = {
+                'fecha': ['fecha', 'date', 'fecha_transaccion'],
+                'nombre': ['nombre', 'name', 'gasto'],
+                'valor': ['valor', 'amount', 'monto'],
+                'tipo': ['tipo', 'type', 'payment_type'],
+                'cuota_actual': ['cuota actual', 'current installment', 'cuota_actual'],
+                'cuotas_restantes': ['cuotas restantes', 'remaining installments', 'cuotas_restantes']
+            }
+
             col_mapping = {}
-            for i, header in enumerate(headers):
-                if 'fecha' in header:
-                    col_mapping['fecha'] = i
-                elif 'nombre' in header:
-                    col_mapping['nombre'] = i
-                elif 'valor' in header:
-                    col_mapping['valor'] = i
-                elif 'tipo' in header:
-                    col_mapping['tipo'] = i
-                elif 'cuota' in header and 'actual' in header:
-                    col_mapping['cuota_actual'] = i
-                elif 'cuotas' in header and 'restantes' in header:
-                    col_mapping['cuotas_restantes'] = i
-            
+            for key, synonyms in col_synonyms.items():
+                for i, header in enumerate(headers):
+                    if any(syn in header for syn in synonyms):
+                        col_mapping[key] = i
+                        break
+
             if not all(key in col_mapping for key in ['fecha', 'nombre', 'valor', 'tipo']):
-                self.stdout.write(f'  ⚠️  Columnas requeridas no encontradas en {sheet_name}')
+                self.stdout.write(f'  ⚠️  Columnas requeridas no encontradas en {sheet_name}: {[k for k in ["fecha", "nombre", "valor", "tipo"] if k not in col_mapping]}')
                 continue
-            
+
             # Procesar filas de datos
             for row_num, row in enumerate(sheet.iter_rows(values_only=True, min_row=header_row + 1), header_row + 1):
                 if not any(cell for cell in row if cell):
                     continue  # Fila vacía
-                
+
                 try:
                     # Extraer datos
                     fecha_str = str(row[col_mapping['fecha']]).strip()
                     nombre = str(row[col_mapping['nombre']]).strip()
                     valor_str = str(row[col_mapping['valor']]).strip()
                     tipo = str(row[col_mapping['tipo']]).strip().lower()
-                    
+
                     # Validar datos básicos
                     if not fecha_str or not nombre or not valor_str or not tipo:
                         continue
-                    
-                    # Parsear fecha
-                    try:
-                        if '/' in fecha_str:
-                            fecha = datetime.strptime(fecha_str, '%d/%m/%Y').date()
-                        else:
-                            fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
-                    except ValueError:
+
+                    # Parsear fecha con fallbacks (MEJORA: Soporte para formatos mixtos)
+                    fecha = self.parse_date(fecha_str)
+                    if not fecha:
                         self.stdout.write(f'    ⚠️  Fecha inválida: {fecha_str}')
                         continue
-                    
-                    # Parsear valor
-                    try:
-                        # Limpiar el string de símbolos y espacios
-                        valor_str = valor_str.replace('$', '').replace(' ', '').strip()
-                        
-                        # Si tiene formato de centavos (ej: 170,00)
-                        if ',' in valor_str and '.' not in valor_str:
-                            # Formato europeo: 170,00 = 170.00
-                            valor = float(valor_str.replace(',', '.'))
-                        elif ',' in valor_str and '.' in valor_str:
-                            # Formato mixto: 1.020,00 = 1020.00
-                            parts = valor_str.split(',')
-                            if len(parts) == 2 and len(parts[1]) == 2:
-                                # Es formato europeo con decimales
-                                valor = float(parts[0].replace('.', '') + '.' + parts[1])
-                            else:
-                                # Otro formato, intentar parsear directamente
-                                valor = float(valor_str.replace(',', ''))
-                        else:
-                            # Sin comas, parsear directamente
-                            valor = float(valor_str)
-                        
-                        # Debug: mostrar valor original y procesado
-                        self.stdout.write(f'    💰 Valor: "{row[col_mapping["valor"]]}" -> {valor_str} -> ${valor:.2f}')
-                            
-                    except ValueError:
+
+                    # Parsear valor con validaciones (MEJORA: Validación de negativos/cero y símbolos extra)
+                    valor = self.parse_amount(valor_str)
+                    if valor is None or valor <= 0:
                         self.stdout.write(f'    ⚠️  Valor inválido: {valor_str}')
                         continue
-                    
+
                     # Determinar categoría
                     categoria_nombre = 'Otros'  # Por defecto
                     nombre_lower = nombre.lower()
-                    
+
                     for keyword, categoria in category_mapping.items():
                         if keyword in nombre_lower:
                             categoria_nombre = categoria
                             break
-                    
+
                     # Obtener o crear categoría
                     categoria, _ = Category.objects.get_or_create(
                         name=categoria_nombre,
                         defaults={'is_active': True}
                     )
-                    
+
                     # Determinar método de pago
                     if tipo in payment_type_mapping:
                         payment_method_name = payment_type_mapping[tipo]
@@ -256,7 +231,7 @@ class Command(BaseCommand):
                     else:
                         self.stdout.write(f'    ⚠️  Tipo de pago no reconocido: {tipo}')
                         continue
-                    
+
                     # Obtener tipo de pago por defecto
                     try:
                         payment_type = PaymentType.objects.filter(
@@ -270,91 +245,78 @@ class Command(BaseCommand):
                     except PaymentType.DoesNotExist:
                         self.stdout.write(f'    ⚠️  Tipo de pago no encontrado para: {payment_method_name}')
                         continue
-                    
-                    # Manejar créditos
+
+                    # Manejar créditos con correcciones (MEJORA: Eliminación de cuota 0, deduplicación, cálculo correcto)
                     if tipo == 'crédito':
-                        cuota_actual = row[col_mapping.get('cuota_actual', 0)] or 0
-                        cuotas_restantes = row[col_mapping.get('cuotas_restantes', 0)] or 0
-                        total_cuotas = int(cuota_actual) + int(cuotas_restantes)
-                        
-                        if total_cuotas > 1:
-                            # Crear grupo de crédito
-                            import uuid
-                            credit_group_id = str(uuid.uuid4())
-                            
-                            # Primera cuota (cuota 0) con monto 0
+                        cuota_actual = int(row[col_mapping.get('cuota_actual', 0)] or 1)  # Default a 1 si falta
+                        cuotas_restantes = int(row[col_mapping.get('cuotas_restantes', 0)] or 0)
+                        total_cuotas = cuota_actual + cuotas_restantes
+
+                        if total_cuotas <= 0:
+                            self.stdout.write(f'    ⚠️  Invalid installment count: {total_cuotas}')
+                            continue
+
+                        # Deduplicación: Verificar si ya existe un grupo similar (MEJORA: Evitar duplicados)
+                        existing_credit = Expense.objects.filter(
+                            user=user,
+                            name=nombre,
+                            is_credit=True,
+                            total_credit_amount=valor * total_cuotas  # Asumir valor es por cuota
+                        ).first()
+
+                        if existing_credit:
+                            self.stdout.write(f'    ⚠️  Crédito duplicado detectado: {nombre}, saltando')
+                            continue
+
+                        # Crear grupo de crédito sin cuota 0
+                        credit_group_id = str(uuid.uuid4())
+
+                        # Calcular monto total asumiendo valor es por cuota
+                        total_amount = valor * total_cuotas
+                        remaining = total_amount - (valor * (cuota_actual - 1))  # Cálculo correcto de remaining
+
+                        # Crear cuota actual
+                        Expense.objects.create(
+                            user=user,
+                            date=fecha,
+                            name=nombre,
+                            amount=valor,
+                            category=categoria,
+                            payment_method=payment_method,
+                            payment_type=payment_type,
+                            description=f'Importado desde Excel - {sheet_name} - Cuota {cuota_actual}',
+                            is_credit=True,
+                            total_credit_amount=total_amount,
+                            installments=total_cuotas,
+                            current_installment=cuota_actual,
+                            remaining_amount=remaining,
+                            credit_group_id=credit_group_id
+                        )
+
+                        # Crear cuotas futuras si hay restantes
+                        current_date = self.calculate_next_installment_date(fecha)  # Mejora en fechas
+                        for i in range(cuota_actual + 1, total_cuotas + 1):
+                            remaining -= valor
                             Expense.objects.create(
                                 user=user,
-                                date=fecha,
-                                name=nombre,
-                                amount=0,
-                                category=categoria,
-                                payment_method=payment_method,
-                                payment_type=payment_type,
-                                description=f'Importado desde Excel - {sheet_name}',
-                                is_credit=True,
-                                total_credit_amount=valor,
-                                installments=total_cuotas,
-                                current_installment=0,
-                                remaining_amount=valor,
-                                credit_group_id=credit_group_id
-                            )
-                            
-                            # Crear cuotas restantes
-                            amount_per_installment = valor / total_cuotas
-                            current_date = fecha
-                            
-                            for i in range(1, total_cuotas + 1):
-                                # Calcular siguiente mes
-                                if current_date.month == 12:
-                                    next_month = 1
-                                    next_year = current_date.year + 1
-                                else:
-                                    next_month = current_date.month + 1
-                                    next_year = current_date.year
-                                
-                                next_date = datetime(next_year, next_month, 1).date()
-                                
-                                Expense.objects.create(
-                                    user=user,
-                                    date=next_date,
-                                    name=nombre,
-                                    amount=amount_per_installment,
-                                    category=categoria,
-                                    payment_method=payment_method,
-                                    payment_type=payment_type,
-                                    description=f'Importado desde Excel - {sheet_name} - Cuota {i}',
-                                    is_credit=True,
-                                    total_credit_amount=valor,
-                                    installments=total_cuotas,
-                                    current_installment=i,
-                                    remaining_amount=valor - (amount_per_installment * i),
-                                    credit_group_id=credit_group_id
-                                )
-                                current_date = next_date
-                            
-                            total_credits += 1
-                            self.stdout.write(f'    ✅ Crédito creado: {nombre} - {total_cuotas} cuotas')
-                        else:
-                            # Crédito de una sola cuota
-                            Expense.objects.create(
-                                user=user,
-                                date=fecha,
+                                date=current_date,
                                 name=nombre,
                                 amount=valor,
                                 category=categoria,
                                 payment_method=payment_method,
                                 payment_type=payment_type,
-                                description=f'Importado desde Excel - {sheet_name}',
+                                description=f'Importado desde Excel - {sheet_name} - Cuota {i}',
                                 is_credit=True,
-                                total_credit_amount=valor,
-                                installments=1,
-                                current_installment=1,
-                                remaining_amount=0,
-                                credit_group_id=None
+                                total_credit_amount=total_amount,
+                                installments=total_cuotas,
+                                current_installment=i,
+                                remaining_amount=max(remaining, 0),  # Evitar negativos
+                                credit_group_id=credit_group_id
                             )
-                            total_credits += 1
-                            self.stdout.write(f'    ✅ Crédito simple: {nombre}')
+                            current_date = self.calculate_next_installment_date(current_date)
+
+                        total_credits += 1
+                        self.stdout.write(f'    ✅ Crédito creado: {nombre} - {total_cuotas} cuotas')
                     else:
                         # Gasto normal
                         Expense.objects.create(
@@ -369,13 +331,13 @@ class Command(BaseCommand):
                             is_credit=False
                         )
                         self.stdout.write(f'    ✅ Gasto: {nombre} - ${valor:.2f}')
-                    
+
                     total_imported += 1
-                    
+
                 except Exception as e:
                     self.stdout.write(f'    ❌ Error procesando fila {row_num}: {e}')
                     continue
-        
+
         # Resumen final
         self.stdout.write('\n' + '='*50)
         self.stdout.write(
@@ -386,5 +348,54 @@ class Command(BaseCommand):
                 f'👤 Usuario asignado: {user.username}'
             )
         )
-        
+
         workbook.close()
+
+    # Método auxiliar para parsear fechas con fallbacks (MEJORA)
+    def parse_date(self, fecha_str):
+        formats = ['%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%m/%d/%Y']
+        for fmt in formats:
+            try:
+                return datetime.strptime(fecha_str, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    # Método auxiliar para calcular próxima fecha de cuota (MEJORA: Ajuste para vencimientos)
+    def calculate_next_installment_date(self, current_date):
+        # Asumir mensual, ajustar al primer lunes si es día 1
+        next_date = current_date.replace(month=current_date.month + 1)
+        if next_date.day == 1:
+            # Si cae en 1ro, mover al primer lunes
+            days_to_monday = (7 - next_date.weekday()) % 7
+            if days_to_monday == 0:
+                days_to_monday = 7
+            next_date += timedelta(days=days_to_monday)
+        return next_date
+
+    # Método auxiliar para parsear montos con validaciones (MEJORA)
+    def parse_amount(self, valor_str):
+        # Limpiar símbolos extra
+        valor_str = valor_str.replace('$', '').replace(' ', '').strip()
+        is_negative = valor_str.startswith('-')
+        valor_str = valor_str.lstrip('-')
+
+        # Parsing existente
+        if ',' in valor_str and '.' not in valor_str:
+            valor = float(valor_str.replace(',', '.'))
+        elif ',' in valor_str and '.' in valor_str:
+            parts = valor_str.split(',')
+            if len(parts) == 2 and len(parts[1]) == 2:
+                valor = float(parts[0].replace('.', '') + '.' + parts[1])
+            else:
+                valor = float(valor_str.replace(',', ''))
+        else:
+            valor = float(valor_str)
+
+        if is_negative:
+            valor = -valor
+
+        # Validaciones
+        if valor == 0 or valor < -10000 or valor > 100000:
+            return None
+        return valor

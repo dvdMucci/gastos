@@ -1,7 +1,15 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from . import views
 
 app_name = 'finances'
+
+# API Router
+router = DefaultRouter()
+router.register(r'expenses', views.ExpenseViewSet, basename='expense')
+router.register(r'categories', views.CategoryViewSet, basename='category')
+router.register(r'payment-methods', views.PaymentMethodViewSet, basename='payment-method')
+router.register(r'payment-types', views.PaymentTypeViewSet, basename='payment-type')
 
 urlpatterns = [
     path('', views.expense_list, name='expense_list'),
@@ -12,4 +20,7 @@ urlpatterns = [
     path('dashboard/', views.dashboard_finances, name='dashboard_finances'),
     path('export/', views.export_expenses, name='export_expenses'),
     path('get-payment-types/', views.get_payment_types, name='get_payment_types'),
+
+    # API URLs
+    path('api/', include(router.urls)),
 ]

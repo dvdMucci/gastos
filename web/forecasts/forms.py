@@ -61,11 +61,11 @@ class ExpenseForecastForm(forms.ModelForm):
 
 class ForecastFilterForm(forms.Form):
     """Formulario para filtrar estimaciones mensuales"""
-    
+
     year = forms.ChoiceField(
         choices=[('', 'Todos los años')] + [(i, str(i)) for i in range(2024, 2030)],
         required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.Select(attrs={'class': 'form-control', 'onchange': 'this.form.submit()'})
     )
     month = forms.ChoiceField(
         choices=[('', 'Todos los meses')] + [(i, calendar.month_name[i]) for i in range(1, 13)],
@@ -83,4 +83,46 @@ class ForecastFilterForm(forms.Form):
         min_value=0,
         decimal_places=2,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Monto máximo', 'step': '0.01'})
+    )
+
+class ExpenseForecastFilterForm(forms.Form):
+    """Formulario para filtrar estimaciones de gastos"""
+
+    name = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Buscar por nombre'})
+    )
+    category = forms.ModelChoiceField(
+        queryset=Category.objects.all(),
+        required=False,
+        empty_label='Todas las categorías',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    is_active = forms.NullBooleanField(
+        required=False,
+        widget=forms.Select(choices=[('', 'Todos'), (True, 'Activas'), (False, 'Inactivas')], attrs={'class': 'form-control'})
+    )
+
+class MonthSelectorForm(forms.Form):
+    """Formulario para seleccionar mes en el dashboard"""
+
+    year = forms.ChoiceField(
+        choices=[(str(i), str(i)) for i in range(2015, 2036)],
+        required=False,
+        widget=forms.Select(attrs={
+            'class': 'form-control',
+            'id': 'year-selector',
+            'onchange': 'this.form.submit()'
+        }),
+        label='Año'
+    )
+    month = forms.ChoiceField(
+        choices=[(str(i), calendar.month_name[i]) for i in range(1, 13)],
+        required=False,
+        widget=forms.Select(attrs={
+            'class': 'form-control',
+            'id': 'month-selector',
+            'onchange': 'this.form.submit()'
+        }),
+        label='Mes'
     )

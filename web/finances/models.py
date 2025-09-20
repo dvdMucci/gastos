@@ -110,6 +110,16 @@ class Expense(models.Model):
         verbose_name = 'Gasto'
         verbose_name_plural = 'Gastos'
         ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['user', 'is_credit']),
+            models.Index(fields=['user', 'subscription']),
+            models.Index(fields=['date']),
+            models.Index(fields=['category']),
+            models.Index(fields=['payment_method']),
+            models.Index(fields=['payment_type']),
+            models.Index(fields=['subscription']),
+        ]
 
     def __str__(self):
         return f"{self.name} - ${self.amount} ({self.date})"

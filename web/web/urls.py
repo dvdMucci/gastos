@@ -13,4 +13,7 @@ urlpatterns = [
     path('finances/', include('finances.urls')), # Incluye las URLs de la aplicación 'finances'
     path('subscriptions/', include('subscriptions.urls')), # Incluye las URLs de la aplicación 'subscriptions'
     path('forecasts/', include('forecasts.urls')), # Incluye las URLs de la aplicación 'forecasts'
+
+    # API authentication
+    path('api-auth/', include('rest_framework.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
