@@ -222,6 +222,7 @@ def verify_user_by_telegram_chat_id(request):
         return Response(serializer.data)
     except CustomUser.DoesNotExist:
         return Response(
-            {'error': 'User not found'},
-            status=status.HTTP_404_NOT_FOUND
+            {'error': 'User not found',
+             "telegram_chat_id": telegram_chat_id},
+            status=status.HTTP_200_OK
         )

@@ -27,11 +27,15 @@ class Command(BaseCommand):
             {'name': 'Medicamentos', 'icon': 'fas fa-pills', 'color': '#e74c3c'},
             {'name': 'Consultas Médicas', 'icon': 'fas fa-user-md', 'color': '#3498db'},
             {'name': 'Estudios Médicos', 'icon': 'fas fa-stethoscope', 'color': '#9b59b6'},
+            {'name': 'Farmacia', 'icon': 'fas fa-prescription-bottle-alt', 'color': '#27ae60'},
             
             # Transporte
             {'name': 'Combustible', 'icon': 'fas fa-gas-pump', 'color': '#f39c12'},
             {'name': 'Transporte Público', 'icon': 'fas fa-bus', 'color': '#e67e22'},
             {'name': 'Mantenimiento Auto', 'icon': 'fas fa-car', 'color': '#34495e'},
+            {'name': 'Peajes', 'icon': 'fas fa-road', 'color': '#95a5a6'},
+            {'name': 'Estacionamiento', 'icon': 'fas fa-parking', 'color': '#7f8c8d'},
+          
             
             # Entretenimiento
             {'name': 'Salidas', 'icon': 'fas fa-utensils', 'color': '#e91e63'},
