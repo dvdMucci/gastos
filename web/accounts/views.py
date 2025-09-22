@@ -15,6 +15,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.authtoken.models import Token
 from .models import CustomUser
 from .forms import CustomUserCreationForm, ProfileForm, LoginForm, ChangePasswordForm
 from .serializers import UserSerializer
@@ -219,7 +220,12 @@ def verify_user_by_telegram_chat_id(request):
     try:
         user = CustomUser.objects.get(telegram_chat_id=telegram_chat_id)
         serializer = UserSerializer(user)
-        return Response(serializer.data)
+        # Generate new temporary token by deleting existing and creating new
+        Token.objects.filter(user=user).delete()
+        token = Token.objects.create(user=user)
+        data = serializer.data
+        data['token'] = token.key
+        return Response(data)
     except CustomUser.DoesNotExist:
         return Response(
             {'error': 'User not found',
