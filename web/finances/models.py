@@ -125,18 +125,19 @@ class Expense(models.Model):
         return f"{self.name} - ${self.amount} ({self.date})"
 
     def save(self, *args, **kwargs):
-        # Si es crédito, calcular el monto restante
-        if self.is_credit and self.total_credit_amount:
+        # Si es crédito, calcular el monto restante solo si no está establecido
+        if self.is_credit and self.total_credit_amount and self.remaining_amount is None:
             if self.current_installment == 1:
                 # Primera cuota: monto restante = total - primera cuota
                 self.remaining_amount = self.total_credit_amount - self.amount
             else:
-                # Cuotas siguientes: monto restante = monto restante anterior - cuota actual
-                if self.remaining_amount is None:
-                    self.remaining_amount = self.total_credit_amount - self.amount
-                else:
-                    self.remaining_amount -= self.amount
-        
+                # Cuotas siguientes: calcular basado en cuotas pagadas (asumiendo cuotas iguales)
+                self.remaining_amount = self.total_credit_amount - (self.amount * self.current_installment)
+
+        # Generar descripción para gastos a crédito si no está proporcionada
+        if self.is_credit and not self.description and self.total_credit_amount and self.installments:
+            self.description = f"Monto total={self.total_credit_amount} Cantidad de cuotas={self.installments}"
+
         super().save(*args, **kwargs)
     
     def get_remaining_installments(self):
