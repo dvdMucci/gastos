@@ -76,6 +76,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
             credit_group_id = str(uuid.uuid4())
             date = validated_data['date']
             name = validated_data['name']
+            custom_description = validated_data.get('description', '')
 
             # Create installment 0
             expense_0 = Expense.objects.create(
@@ -86,7 +87,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
                 category=validated_data['category'],
                 payment_method=validated_data['payment_method'],
                 payment_type=validated_data['payment_type'],
-                description=f"Monto total={total_credit_amount} Cantidad de cuotas={installments}",
+                description=f"{custom_description} Monto total={total_credit_amount} Cantidad de cuotas={installments}".strip(),
                 is_credit=True,
                 total_credit_amount=total_credit_amount,
                 installments=installments,
