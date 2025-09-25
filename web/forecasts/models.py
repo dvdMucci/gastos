@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.core.cache import cache
 from datetime import datetime, timedelta
 import calendar
+from dateutil.relativedelta import relativedelta
 from finances.models import Category, PaymentMethod, PaymentType
 from accounts.models import CustomUser
 
@@ -352,14 +353,14 @@ class MonthlyForecast(models.Model):
         for i in range(-months_back, months_forward + 1):
             if i < 0:
                 # Meses pasados
-                month_date = current_month + timedelta(days=30*i)
+                month_date = (current_month + relativedelta(months=i)).replace(day=1)
                 cls._generate_historical_month(user, month_date)
             elif i == 0:
                 # Mes actual
                 cls._generate_current_month(user, current_month)
             else:
                 # Meses futuros
-                month_date = current_month + timedelta(days=30*i)
+                month_date = (current_month + relativedelta(months=i)).replace(day=1)
                 cls._generate_future_month(user, month_date)
 
         # Cache the result for 10 minutes
@@ -460,8 +461,6 @@ class MonthlyForecast(models.Model):
     @classmethod
     def _generate_future_month(cls, user, month_date):
         """Generar datos para un mes futuro"""
-        import logging
-        logger = logging.getLogger(__name__)
         from finances.models import Expense
         from subscriptions.models import Subscription
         from .models import ExpenseForecast
@@ -498,7 +497,7 @@ class MonthlyForecast(models.Model):
 
         # Proyecciones de estimaciones activas
         estimates = ExpenseForecast.objects.filter(user=user, is_active=True)
-        estimates_total = sum(est.get_monthly_amount() for est in estimates)
+        estimates_total = sum(est.get_forecast_for_month(month_date.year, month_date.month) for est in estimates)
 
         total_projected = subscriptions_total + credits_total + estimates_total
 
