@@ -460,6 +460,8 @@ class MonthlyForecast(models.Model):
     @classmethod
     def _generate_future_month(cls, user, month_date):
         """Generar datos para un mes futuro"""
+        import logging
+        logger = logging.getLogger(__name__)
         from finances.models import Expense
         from subscriptions.models import Subscription
         from .models import ExpenseForecast
@@ -468,15 +470,31 @@ class MonthlyForecast(models.Model):
         subscriptions = Subscription.objects.filter(user=user, status='active')
         subscriptions_total = sum(sub.get_monthly_amount() for sub in subscriptions)
 
-        # Proyecciones de créditos
-        credits = Expense.objects.filter(
+        # Proyecciones de créditos - FIXED LOGIC
+        # Find all ongoing credit installments
+        ongoing_credits = Expense.objects.filter(
             user=user,
             is_credit=True,
-            date__year=month_date.year,
-            date__month=month_date.month
+            remaining_amount__gt=0
         )
-        credits_total = credits.aggregate(
-            total=models.Sum('amount'))['total'] or 0
+
+        credits_total = 0
+        current_date = timezone.now().date()
+        current_month_start = current_date.replace(day=1)
+
+        for credit in ongoing_credits:
+            if credit.total_credit_amount and credit.installments and credit.current_installment < credit.installments:
+                # Calculate monthly installment amount
+                monthly_installment = credit.total_credit_amount / credit.installments
+                remaining_installments = credit.installments - credit.current_installment
+
+                # Calculate months from current month to target month
+                months_diff = (month_date.year - current_month_start.year) * 12 + (month_date.month - current_month_start.month)
+
+                # If this future month falls within the remaining installments period
+                if months_diff >= 0 and months_diff < remaining_installments:
+                    credits_total += monthly_installment
+
 
         # Proyecciones de estimaciones activas
         estimates = ExpenseForecast.objects.filter(user=user, is_active=True)
