@@ -11,6 +11,7 @@ urlpatterns = [
 
     path('accounts/', include('accounts.urls')), # Incluye las URLs de la aplicación 'accounts'
     path('finances/', include('finances.urls')), # Incluye las URLs de la aplicación 'finances'
+    path('income/', include('income.urls')), # Incluye las URLs de la aplicación 'income'
     path('subscriptions/', include('subscriptions.urls')), # Incluye las URLs de la aplicación 'subscriptions'
     path('forecasts/', include('forecasts.urls')), # Incluye las URLs de la aplicación 'forecasts'
 

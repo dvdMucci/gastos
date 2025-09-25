@@ -85,7 +85,89 @@
     </div>
     {% endif %}
 </div>
- 
+
+<!-- Estadísticas de Ingresos -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="fas fa-coins"></i> Estadísticas de Ingresos</h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 col-lg-3">
+        <div class="card bg-success text-white mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Ingresos del Mes</h5>
+                        <h3 class="mb-0">${{ month_income_total|default:0|floatformat:2 }}</h3>
+                        <small>{{ current_month|default:"" }}/{{ current_year|default:"" }}</small>
+                    </div>
+                    <div>
+                        <i class="fas fa-coins fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card bg-info text-white mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Ingresos Recurrentes</h5>
+                        <h3 class="mb-0">${{ recurring_income_total|default:0|floatformat:2 }}</h3>
+                        <small>Total mensual</small>
+                    </div>
+                    <div>
+                        <i class="fas fa-repeat fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card bg-warning text-white mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Total Ingresos</h5>
+                        <h3 class="mb-0">{{ total_incomes|default:0 }}</h3>
+                        <small>Registros</small>
+                    </div>
+                    <div>
+                        <i class="fas fa-list fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card bg-secondary text-white mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Acciones</h5>
+                        <div class="mt-2">
+                            <a href="{% url 'income:income_create' %}" class="btn btn-light btn-sm me-1">
+                                <i class="fas fa-plus"></i> Nuevo
+                            </a>
+                            <a href="{% url 'income:income_list' %}" class="btn btn-light btn-sm">
+                                <i class="fas fa-list"></i> Ver Todos
+                            </a>
+                        </div>
+                    </div>
+                    <div>
+                        <i class="fas fa-cogs fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="row">
     <div class="col-12">
@@ -100,6 +182,7 @@
                     <li>Gestión de perfil de usuario</li>
                     <li>Configuración de 2FA con Google Authenticator</li>
                     <li>Integración con Telegram (Chat ID)</li>
+                    <li>Gestión de Ingresos</li>
                     {% if user.can_manage_users %}
                     <li>Gestión de usuarios</li>
                     {% endif %}

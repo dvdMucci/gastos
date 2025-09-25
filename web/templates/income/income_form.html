@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+    {% if form.instance.pk %}Editar Ingreso{% else %}Nuevo Ingreso{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0">
+                        {% if form.instance.pk %}
+                            <i class="fas fa-edit"></i> Editar Ingreso
+                        {% else %}
+                            <i class="fas fa-plus"></i> Nuevo Ingreso
+                        {% endif %}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.amount.id_for_label }}" class="form-label">Monto *</label>
+                                    {{ form.amount }}
+                                    {% if form.amount.errors %}
+                                        <div class="text-danger">{{ form.amount.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.date.id_for_label }}" class="form-label">Fecha *</label>
+                                    {{ form.date }}
+                                    {% if form.date.errors %}
+                                        <div class="text-danger">{{ form.date.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.category.id_for_label }}" class="form-label">Categoría *</label>
+                                    {{ form.category }}
+                                    {% if form.category.errors %}
+                                        <div class="text-danger">{{ form.category.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.source.id_for_label }}" class="form-label">Fuente *</label>
+                                    {{ form.source }}
+                                    {% if form.source.errors %}
+                                        <div class="text-danger">{{ form.source.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.type.id_for_label }}" class="form-label">Tipo *</label>
+                                    {{ form.type }}
+                                    {% if form.type.errors %}
+                                        <div class="text-danger">{{ form.type.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.is_recurring.id_for_label }}" class="form-label">Recurrente</label>
+                                    {{ form.is_recurring }}
+                                    {% if form.is_recurring.errors %}
+                                        <div class="text-danger">{{ form.is_recurring.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Campo de frecuencia recurrente (se muestra solo si es recurrente) -->
+                        <div id="recurring-frequency-field" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.recurring_frequency.id_for_label }}" class="form-label">Frecuencia Recurrente *</label>
+                                        {{ form.recurring_frequency }}
+                                        {% if form.recurring_frequency.errors %}
+                                            <div class="text-danger">{{ form.recurring_frequency.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">Descripción</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                                <div class="text-danger">{{ form.description.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'income:income_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Volver
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i>
+                                {% if form.instance.pk %}Actualizar{% else %}Crear{% endif %} Ingreso
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const isRecurringField = document.getElementById('id_is_recurring');
+    const recurringFrequencyFieldDiv = document.getElementById('recurring-frequency-field');
+    const recurringFrequencySelect = document.getElementById('id_recurring_frequency');
+
+    // Función para manejar campos recurrentes
+    function handleRecurringFields() {
+        if (isRecurringField.checked) {
+            recurringFrequencyFieldDiv.style.display = 'block';
+            recurringFrequencySelect.required = true;
+        } else {
+            recurringFrequencyFieldDiv.style.display = 'none';
+            recurringFrequencySelect.required = false;
+            recurringFrequencySelect.value = '';
+        }
+    }
+
+    // Event listener para cambio de recurrente
+    isRecurringField.addEventListener('change', handleRecurringFields);
+
+    // Si ya está marcado al cargar la página
+    if (isRecurringField.checked) {
+        handleRecurringFields();
+    }
+});
+</script>
+{% endblock %}

@@ -16,3 +16,4 @@ whisper
 torch
 redis
 django-redis
+requests

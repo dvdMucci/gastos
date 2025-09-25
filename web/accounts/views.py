@@ -5,6 +5,8 @@ from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.core.paginator import Paginator
+from django.db.models import Sum
+from django.utils import timezone
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from django_otp.util import random_hex # No usado directamente en el código provisto, pero útil para OTP
 import qrcode
@@ -19,6 +21,7 @@ from rest_framework.authtoken.models import Token
 from .models import CustomUser
 from .forms import CustomUserCreationForm, ProfileForm, LoginForm, ChangePasswordForm
 from .serializers import UserSerializer
+from income.models import Income
 
 def login_view(request):
     if request.method == 'POST':
@@ -39,9 +42,36 @@ def logout_view(request):
 
 @login_required
 def dashboard(request):
+    # Current month and year
+    current_month = timezone.now().month
+    current_year = timezone.now().year
+
+    # Income statistics for current month
+    current_month_incomes = Income.objects.filter(
+        user=request.user,
+        date__year=current_year,
+        date__month=current_month
+    )
+    month_income_total = current_month_incomes.aggregate(total=Sum('amount'))['total'] or 0
+
+    # Recurring income total (monthly recurring incomes)
+    recurring_income_total = Income.objects.filter(
+        user=request.user,
+        is_recurring=True,
+        recurring_frequency='monthly'
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    # Total number of income records
+    total_incomes = Income.objects.filter(user=request.user).count()
+
     context = {
         'user': request.user,
         'user_count': CustomUser.objects.count() if request.user.can_manage_users() else None,
+        'month_income_total': month_income_total,
+        'recurring_income_total': recurring_income_total,
+        'total_incomes': total_incomes,
+        'current_month': current_month,
+        'current_year': current_year,
     }
     return render(request, 'dashboard.html', context)
 
