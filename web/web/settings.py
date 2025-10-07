@@ -35,6 +35,8 @@ INSTALLED_APPS = [
     'finances',
     'subscriptions',
     'forecasts',
+    'income',
+    'security',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
