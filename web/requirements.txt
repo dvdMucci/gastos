@@ -17,3 +17,4 @@ torch
 redis
 django-redis
 requests
+python-dateutil

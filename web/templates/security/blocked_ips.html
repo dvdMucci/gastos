@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}IPs Bloqueadas{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1><i class="fas fa-ban"></i> IPs Bloqueadas</h1>
+                <a href="{% url 'security:whitelisted_ips' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-list"></i> Lista Blanca
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>IP</th>
+                            <th>Motivo</th>
+                            <th>Tiempo restante</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for blocked_ip in blocked_ips %}
+                        <tr>
+                            <td>{{ blocked_ip.ip }}</td>
+                            <td>{{ blocked_ip.reason|default:"Actividad sospechosa" }}</td>
+                            <td>Desconocido</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <form method="post" action="{% url 'security:unblock_ip' blocked_ip.id %}" style="display: inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-success btn-sm">
+                                            <i class="fas fa-unlock"></i> Desbloquear
+                                        </button>
+                                    </form>
+                                    <form method="post" action="{% url 'security:whitelist_ip' blocked_ip.id %}" style="display: inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-plus"></i> Lista Blanca
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4">
+                                <div class="text-muted">
+                                    <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                    <p>No hay IPs bloqueadas</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

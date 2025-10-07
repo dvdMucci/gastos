@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from datetime import datetime, timedelta
 import calendar
+import json
 from .models import ExpenseForecast, MonthlyForecast
 from finances.models import Expense
 from .forms import ExpenseForecastForm, ForecastFilterForm, ExpenseForecastFilterForm, MonthSelectorForm
@@ -95,80 +96,63 @@ def forecast_dashboard(request):
         category_labels = list(category_totals.keys())
         category_data = list(category_totals.values())
     
-    # Calcular totales
-    total_projected = sum(f.total_projected for f in monthly_forecasts if f.total_projected)
-    total_subscriptions = sum(f.projected_subscriptions for f in monthly_forecasts if f.projected_subscriptions)
-    total_credits = sum(f.projected_credits for f in monthly_forecasts if f.projected_credits)
-    total_estimates = sum(f.projected_estimates for f in monthly_forecasts if f.projected_estimates)
-    
-    # Preparar datos para el gráfico
-    chart_labels = []
-    subscriptions_data = []
-    credits_data = []
-    estimates_data = []
-    other_data = []
-    totals_data = []
+    # Calcular totales para meses futuros
+    current_month = timezone.now().date().replace(day=1)
+    future_forecasts = [f for f in monthly_forecasts if f.month > current_month]
 
+    total_projected = sum(f.future_estimated_total for f in future_forecasts if f.future_estimated_total)
+    total_subscriptions = sum(f.future_real_subscriptions for f in future_forecasts if f.future_real_subscriptions)
+    total_credits = sum((f.future_real_credits or 0) + (f.future_estimated_credits or 0) for f in future_forecasts)
+    total_estimates = sum(f.future_estimated_other for f in future_forecasts if f.future_estimated_other)
+    
+    # Preparar datos para el gráfico según la nueva lógica
+    chart_labels = []
+    real_data = []  # Gastos reales (contado + crédito + suscripciones)
+    estimated_data = []  # Gastos estimados dinámicos
+    real_totals_data = []  # Total real
+    estimated_totals_data = []  # Total estimado (real + estimado)
+
+    current_month = timezone.now().date().replace(day=1)
     for forecast in monthly_forecasts:
         month_name = forecast.month.strftime('%b %Y')
         chart_labels.append(month_name)
 
-        # Datos históricos
-        if forecast.actual_subscriptions or forecast.actual_credits or forecast.actual_other_expenses:
-            subs = float(forecast.actual_subscriptions or 0)
-            creds = float(forecast.actual_credits or 0)
-            ests = 0  # No hay estimaciones en datos históricos
-            other = float(forecast.actual_other_expenses or 0)
-            subscriptions_data.append(subs)
-            credits_data.append(creds)
-            estimates_data.append(ests)
-            other_data.append(other)
-            totals_data.append(subs + creds + ests + other)
-        # Mes actual
-        elif forecast.current_month_estimated or forecast.current_month_actual:
-            # Calculate dates for the month
-            start_date = forecast.month
-            if forecast.month.month == 12:
-                end_date = forecast.month.replace(year=forecast.month.year + 1, month=1) - timedelta(days=1)
-            else:
-                end_date = forecast.month.replace(month=forecast.month.month + 1) - timedelta(days=1)
-
-            # Query expenses
-            expenses = Expense.objects.filter(
-                user=request.user,
-                date__range=[start_date, end_date]
-            )
-
-            # Calculate sums
-            subscriptions_sum = expenses.filter(subscription__isnull=False).aggregate(Sum('amount'))['amount__sum'] or 0
-            credits_sum = expenses.filter(is_credit=True, subscription__isnull=True).aggregate(Sum('amount'))['amount__sum'] or 0
-            other_sum = expenses.filter(is_credit=False, subscription__isnull=True).aggregate(Sum('amount'))['amount__sum'] or 0
-
-            # Set data
-            subs = float(subscriptions_sum)
-            creds = float(credits_sum)
-            ests = 0
-            other = float(other_sum)
-            subscriptions_data.append(subs)
-            credits_data.append(creds)
-            estimates_data.append(ests)
-            other_data.append(other)
-            totals_data.append(subs + creds + ests + other)
-        # Meses futuros
+        if forecast.month < current_month:
+            # MESES ANTERIORES: Solo gastos reales (contado + crédito + suscripciones)
+            real = float((forecast.actual_subscriptions or 0) + (forecast.actual_credits or 0) + (forecast.actual_other_expenses or 0))
+            estimated = 0  # No hay estimados en meses pasados
+            real_data.append(real)
+            estimated_data.append(estimated)
+            real_totals_data.append(real)
+            estimated_totals_data.append(real)
+        elif forecast.month == current_month:
+            # MES ACTUAL: Gastos reales hasta hoy + solo la diferencia estimada
+            real = float(forecast.current_month_actual or 0)
+            estimated_total = float(forecast.current_month_estimated or 0)
+            # Solo mostrar la diferencia entre estimado y real
+            estimated = max(0, estimated_total - real)
+            real_data.append(real)
+            estimated_data.append(estimated)
+            real_totals_data.append(real)
+            estimated_totals_data.append(real + estimated)
         else:
-            subs = float(forecast.projected_subscriptions or 0)
-            creds = float(forecast.projected_credits or 0)
-            ests = float(forecast.projected_estimates or 0)
-            other = 0
-            subscriptions_data.append(subs)
-            credits_data.append(creds)
-            estimates_data.append(ests)
-            other_data.append(other)
-            totals_data.append(subs + creds + ests + other)
+            # MESES FUTUROS: Gastos reales (suscripciones + cuotas) + estimado dinámico
+            real = float(forecast.future_real_total or 0)  # Suscripciones + cuotas reales
+            estimated = float(forecast.future_estimated_other or 0)  # Estimado dinámico
+            real_data.append(real)
+            estimated_data.append(estimated)
+            real_totals_data.append(real)
+            estimated_totals_data.append(real + estimated)
     
     # Preparar valores para el formulario
     selected_year = str(selected_month.year) if selected_month else None
     selected_month_num = str(selected_month.month) if selected_month else None
+
+    logger.info(f"Chart data - Labels: {chart_labels}")
+    logger.info(f"Chart data - Real data: {real_data}")
+    logger.info(f"Chart data - Estimated data: {estimated_data}")
+    logger.info(f"Chart data - Real totals: {real_totals_data}")
+    logger.info(f"Chart data - Estimated totals: {estimated_totals_data}")
 
     context = {
         'monthly_forecasts': monthly_forecasts,
@@ -178,18 +162,17 @@ def forecast_dashboard(request):
         'total_subscriptions': total_subscriptions,
         'total_credits': total_credits,
         'total_estimates': total_estimates,
-        'chart_labels': chart_labels,
-        'subscriptions_data': subscriptions_data,
-        'credits_data': credits_data,
-        'estimates_data': estimates_data,
-        'other_data': other_data,
-        'totals_data': totals_data,
+        'chart_labels': json.dumps(chart_labels),
+        'real_data': json.dumps(real_data),
+        'estimated_data': json.dumps(estimated_data),
+        'real_totals_data': json.dumps(real_totals_data),
+        'estimated_totals_data': json.dumps(estimated_totals_data),
         'month_form': month_form,
         'selected_month': selected_month,
         'selected_year': selected_year,
         'selected_month_num': selected_month_num,
-        'category_labels': category_labels,
-        'category_data': category_data,
+        'category_labels': json.dumps(category_labels),
+        'category_data': json.dumps(category_data),
     }
     return render(request, 'forecasts/dashboard.html', context)
 
@@ -312,6 +295,17 @@ def monthly_forecasts(request):
     # Obtener estimaciones mensuales
     monthly_forecasts = MonthlyForecast.objects.filter(user=request.user).order_by('month')
     
+    # Anotar total_projected para filtrado y agregado
+    from django.db.models import Case, When, F, DecimalField
+    monthly_forecasts = monthly_forecasts.annotate(
+        total_projected=Case(
+            When(future_estimated_total__gt=0, then=F('future_estimated_total')),
+            When(current_month_estimated__gt=0, then=F('current_month_estimated')),
+            default=F('actual_subscriptions') + F('actual_credits') + F('actual_other_expenses'),
+            output_field=DecimalField(max_digits=12, decimal_places=2)
+        )
+    )
+
     # Aplicar filtros
     form = ForecastFilterForm(request.GET)
     if form.is_valid():
@@ -319,7 +313,7 @@ def monthly_forecasts(request):
         month = form.cleaned_data.get('month')
         min_amount = form.cleaned_data.get('min_amount')
         max_amount = form.cleaned_data.get('max_amount')
-        
+
         if year:
             monthly_forecasts = monthly_forecasts.filter(month__year=year)
         if month:
@@ -328,12 +322,12 @@ def monthly_forecasts(request):
             monthly_forecasts = monthly_forecasts.filter(total_projected__gte=min_amount)
         if max_amount:
             monthly_forecasts = monthly_forecasts.filter(total_projected__lte=max_amount)
-    
+
     # Paginación
     paginator = Paginator(monthly_forecasts, 24)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
+
     # Estadísticas
     total_projected = monthly_forecasts.aggregate(total=Sum('total_projected'))['total'] or 0
     avg_monthly = total_projected / monthly_forecasts.count() if monthly_forecasts else 0

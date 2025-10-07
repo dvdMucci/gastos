@@ -3,6 +3,19 @@
 
 {% block title %}Dashboard de Estimaciones{% endblock %}
 
+{% block extra_css %}
+<style>
+    #forecastChart {
+        max-height: 400px !important;
+        height: 400px !important;
+    }
+    .chart-container {
+        height: 400px;
+        position: relative;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-4">
     <!-- Header -->
@@ -31,41 +44,33 @@
             <div class="row">
                 <div class="col-md-3">
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="show-subscriptions" checked>
-                        <label class="form-check-label" for="show-subscriptions">
-                            <i class="fas fa-sync-alt"></i> Suscripciones
+                        <input class="form-check-input" type="checkbox" id="show-real" checked>
+                        <label class="form-check-label" for="show-real">
+                            <i class="fas fa-money-bill-wave"></i> Gastos Reales
                         </label>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="show-credits" checked>
-                        <label class="form-check-label" for="show-credits">
-                            <i class="fas fa-credit-card"></i> Créditos
+                        <input class="form-check-input" type="checkbox" id="show-estimated" checked>
+                        <label class="form-check-label" for="show-estimated">
+                            <i class="fas fa-chart-bar"></i> Estimado Dinámico
                         </label>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="show-estimates" checked>
-                        <label class="form-check-label" for="show-estimates">
-                            <i class="fas fa-chart-bar"></i> Estimaciones Activas
+                        <input class="form-check-input" type="checkbox" id="show-real-line" checked>
+                        <label class="form-check-label" for="show-real-line">
+                            <i class="fas fa-chart-line"></i> Línea Máximos Reales
                         </label>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="show-other" checked>
-                        <label class="form-check-label" for="show-other">
-                            <i class="fas fa-receipt"></i> Otros Gastos
-                        </label>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="show-total" checked>
-                        <label class="form-check-label" for="show-total">
-                            <i class="fas fa-chart-line"></i> Línea Total
+                        <input class="form-check-input" type="checkbox" id="show-estimated-line" checked>
+                        <label class="form-check-label" for="show-estimated-line">
+                            <i class="fas fa-chart-line"></i> Línea Máximos Estimados
                         </label>
                     </div>
                 </div>
@@ -169,7 +174,24 @@
             <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Proyección de Gastos (6 meses atrás + 12 meses adelante)</h5>
         </div>
         <div class="card-body">
-            <canvas id="forecastChart" width="400" height="200"></canvas>
+            <div class="alert alert-info mb-3">
+                <h6><i class="fas fa-info-circle"></i> Cómo interpretar el gráfico:</h6>
+                <ul class="mb-0">
+                    <li><strong>Meses anteriores:</strong> Solo gastos reales (contado + crédito + suscripciones)</li>
+                    <li><strong>Mes actual:</strong> Gastos reales hasta hoy + solo la diferencia estimada restante</li>
+                    <li><strong>Meses futuros:</strong> Gastos reales (suscripciones + cuotas) + estimado dinámico basado en el promedio de los últimos 6 meses</li>
+                    <li><strong>Líneas de tendencia:</strong> Conectan los máximos reales y estimados para mostrar la evolución</li>
+                </ul>
+            </div>
+            <div id="chart-loading" class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando gráfico...</span>
+                </div>
+                <p class="mt-2 text-muted">Cargando gráfico de proyecciones...</p>
+            </div>
+            <div class="chart-container">
+                <canvas id="forecastChart" style="display: none;"></canvas>
+            </div>
         </div>
     </div>
 
@@ -285,124 +307,220 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Datos del gráfico
+    // Timeout para mostrar error si el gráfico no carga
+    const chartTimeout = setTimeout(function() {
+        const loadingElement = document.getElementById('chart-loading');
+        if (loadingElement && loadingElement.style.display !== 'none') {
+            loadingElement.innerHTML = '<div class="alert alert-warning">El gráfico está tardando en cargar. <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">Recargar página</button></div>';
+        }
+    }, 5000); // 5 segundos timeout
+    
+    // Datos del gráfico - Versión corregida
     const chartData = {
         labels: {{ chart_labels|safe }},
         datasets: [
             {
-                label: 'Suscripciones',
-                data: {{ subscriptions_data|safe }},
+                label: 'Gastos Reales',
+                data: {{ real_data|safe }},
                 backgroundColor: 'rgba(40, 167, 69, 0.8)',
                 borderColor: 'rgba(40, 167, 69, 1)',
-                borderWidth: 2,
-                stack: 'Stack 0',
-                type: 'bar',
-                hidden: false
+                borderWidth: 1,
+                stack: 'main'
             },
             {
-                label: 'Créditos',
-                data: {{ credits_data|safe }},
+                label: 'Estimado Dinámico',
+                data: {{ estimated_data|safe }},
                 backgroundColor: 'rgba(255, 193, 7, 0.8)',
                 borderColor: 'rgba(255, 193, 7, 1)',
-                borderWidth: 2,
-                stack: 'Stack 0',
-                type: 'bar',
-                hidden: false
+                borderWidth: 1,
+                stack: 'main'
             },
             {
-                label: 'Estimaciones Activas',
-                data: {{ estimates_data|safe }},
-                backgroundColor: 'rgba(23, 162, 184, 0.8)',
-                borderColor: 'rgba(23, 162, 184, 1)',
-                borderWidth: 2,
-                stack: 'Stack 0',
-                type: 'bar',
-                hidden: false
-            },
-            {
-                label: 'Otros Gastos',
-                data: {{ other_data|safe }},
-                backgroundColor: 'rgba(108, 117, 125, 0.8)',
-                borderColor: 'rgba(108, 117, 125, 1)',
-                borderWidth: 2,
-                stack: 'Stack 0',
-                type: 'bar',
-                hidden: false
-            },
-            {
-                label: 'Total',
-                data: {{ totals_data|safe }},
-                backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                borderColor: 'rgba(220, 53, 69, 1)',
+                label: 'Línea Máximos Reales',
+                data: {{ real_totals_data|safe }},
+                type: 'line',
+                borderColor: 'rgba(40, 167, 69, 1)',
+                backgroundColor: 'rgba(40, 167, 69, 0.1)',
                 borderWidth: 3,
                 fill: false,
+                tension: 0.4,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: 'rgba(40, 167, 69, 1)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                yAxisID: 'y'
+            },
+            {
+                label: 'Línea Máximos Estimados',
+                data: {{ estimated_totals_data|safe }},
                 type: 'line',
-                pointBackgroundColor: 'rgba(220, 53, 69, 1)',
-                pointBorderColor: 'rgba(220, 53, 69, 1)',
-                pointRadius: 5,
-                tension: 0.1,
-                hidden: false
+                borderColor: 'rgba(255, 193, 7, 1)',
+                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                borderWidth: 3,
+                fill: false,
+                tension: 0.4,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: 'rgba(255, 193, 7, 1)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                yAxisID: 'y'
             }
         ]
     };
 
+    // Calcular el valor máximo de todos los datos para auto-ajustar la escala
+    let maxValue = 0;
+    chartData.datasets.forEach(dataset => {
+        dataset.data.forEach(value => {
+            if (value && value > maxValue) {
+                maxValue = value;
+            }
+        });
+    });
+    
+    // Agregar un 15% de margen superior para mejor visualización
+    const yAxisMax = maxValue * 1.15;
+    
+    console.log('Max value found:', maxValue);
+    console.log('Y-axis max set to:', yAxisMax);
+
     // Crear gráfico
-    const ctx = document.getElementById('forecastChart').getContext('2d');
-    const chart = new Chart(ctx, {
-        data: chartData,
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    stacked: true,
+    const canvas = document.getElementById('forecastChart');
+    if (!canvas) {
+        console.error('Chart canvas not found!');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Debug: Log chart data
+    console.log('Chart Data:', chartData);
+    console.log('Labels:', chartData.labels);
+    console.log('Datasets:', chartData.datasets);
+    
+    try {
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                aspectRatio: 2,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
                 },
-                y: {
-                    stacked: true,
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return '$' + value.toLocaleString();
+                scales: {
+                    x: {
+                        stacked: true,
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        max: yAxisMax, // Usar el valor calculado dinámicamente
+                        ticks: {
+                            maxTicksLimit: 8,
+                            callback: function(value) {
+                                if (value >= 1000000) {
+                                    return '$' + (value / 1000000).toFixed(1) + 'M';
+                                } else if (value >= 1000) {
+                                    return '$' + (value / 1000).toFixed(0) + 'K';
+                                }
+                                return '$' + value.toLocaleString();
+                            }
                         }
                     }
-                }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': $' + context.parsed.y.toLocaleString();
+                },
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': $' + context.parsed.y.toLocaleString();
+                            }
                         }
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                animation: {
+                    duration: 300,
+                    easing: 'easeInOutQuart'
+                },
+                elements: {
+                    bar: {
+                        borderRadius: 4,
+                        borderSkipped: false,
                     }
                 }
             }
+        });
+    
+    console.log('Chart created successfully:', chart);
+    
+    // Ocultar loading y mostrar gráfico
+    clearTimeout(chartTimeout); // Limpiar el timeout
+    const loadingElement = document.getElementById('chart-loading');
+    if (loadingElement) {
+        loadingElement.style.display = 'none';
+    }
+    canvas.style.display = 'block';
+    
+    // Forzar redimensionamiento del gráfico
+    setTimeout(() => {
+        if (chart && chart.resize) {
+            chart.resize();
+        }
+    }, 100);
+    
+    } catch (error) {
+        console.error('Error creating chart:', error);
+        const loadingElement = document.getElementById('chart-loading');
+        if (loadingElement) {
+            loadingElement.innerHTML = '<div class="alert alert-danger">Error al crear el gráfico: ' + error.message + '</div>';
+        }
+        return;
+    }
+
+    // Filtros del gráfico (4 datasets: 2 barras + 2 líneas)
+    document.getElementById('show-real').addEventListener('change', function() {
+        if (chart && chart.getDatasetMeta(0)) {
+            chart.getDatasetMeta(0).hidden = !this.checked;
+            chart.update();
         }
     });
 
-    // Filtros del gráfico
-    document.getElementById('show-subscriptions').addEventListener('change', function() {
-        chart.getDatasetMeta(0).hidden = !this.checked;
-        chart.update();
+    document.getElementById('show-estimated').addEventListener('change', function() {
+        if (chart && chart.getDatasetMeta(1)) {
+            chart.getDatasetMeta(1).hidden = !this.checked;
+            chart.update();
+        }
     });
 
-    document.getElementById('show-credits').addEventListener('change', function() {
-        chart.getDatasetMeta(1).hidden = !this.checked;
-        chart.update();
+    document.getElementById('show-real-line').addEventListener('change', function() {
+        if (chart && chart.getDatasetMeta(2)) {
+            chart.getDatasetMeta(2).hidden = !this.checked;
+            chart.update();
+        }
     });
 
-    document.getElementById('show-estimates').addEventListener('change', function() {
-        chart.getDatasetMeta(2).hidden = !this.checked;
-        chart.update();
-    });
-
-    document.getElementById('show-other').addEventListener('change', function() {
-        chart.getDatasetMeta(3).hidden = !this.checked;
-        chart.update();
-    });
-
-    document.getElementById('show-total').addEventListener('change', function() {
-        chart.getDatasetMeta(4).hidden = !this.checked;
-        chart.update();
+    document.getElementById('show-estimated-line').addEventListener('change', function() {
+        if (chart && chart.getDatasetMeta(3)) {
+            chart.getDatasetMeta(3).hidden = !this.checked;
+            chart.update();
+        }
     });
 
     // Crear gráfico de categorías

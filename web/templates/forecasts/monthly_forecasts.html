@@ -123,8 +123,8 @@
                                 {% if forecast.actual_subscriptions %}
                                     <span class="badge bg-success">${{ forecast.actual_subscriptions|floatformat:2 }}</span>
                                     <br><small class="text-muted">Real</small>
-                                {% elif forecast.projected_subscriptions %}
-                                    <span class="badge bg-success">${{ forecast.projected_subscriptions|floatformat:2 }}</span>
+                                {% elif forecast.future_real_subscriptions %}
+                                    <span class="badge bg-success">${{ forecast.future_real_subscriptions|floatformat:2 }}</span>
                                     <br><small class="text-muted">Proyectado</small>
                                 {% elif forecast.current_month_estimated %}
                                     <span class="badge bg-success">${{ forecast.current_month_estimated|floatformat:2 }}</span>
@@ -137,16 +137,16 @@
                                 {% if forecast.actual_credits %}
                                     <span class="badge bg-warning">${{ forecast.actual_credits|floatformat:2 }}</span>
                                     <br><small class="text-muted">Real</small>
-                                {% elif forecast.projected_credits %}
-                                    <span class="badge bg-warning">${{ forecast.projected_credits|floatformat:2 }}</span>
+                                {% elif forecast.future_real_credits or forecast.future_estimated_credits %}
+                                    <span class="badge bg-warning">${{ forecast.future_real_credits|add:forecast.future_estimated_credits|floatformat:2 }}</span>
                                     <br><small class="text-muted">Proyectado</small>
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if forecast.projected_estimates %}
-                                    <span class="badge bg-info">${{ forecast.projected_estimates|floatformat:2 }}</span>
+                                {% if forecast.future_estimated_other %}
+                                    <span class="badge bg-info">${{ forecast.future_estimated_other|floatformat:2 }}</span>
                                     <br><small class="text-muted">Proyectado</small>
                                 {% else %}
                                     <span class="text-muted">-</span>
@@ -161,7 +161,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <strong class="text-primary">${{ forecast.total_projected|floatformat:2 }}</strong>
+                                <strong class="text-primary">${{ forecast.get_total_projected|floatformat:2 }}</strong>
                                 {% if forecast.current_month_actual %}
                                     <br><small class="text-muted">Real: ${{ forecast.current_month_actual|floatformat:2 }}</small>
                                 {% endif %}

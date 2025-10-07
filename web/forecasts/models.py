@@ -299,13 +299,15 @@ class MonthlyForecast(models.Model):
     current_month_estimated = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Estimación del Mes Actual')
     current_month_actual = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Gastos Reales del Mes Actual')
     
-    # Datos futuros proyectados
-    projected_subscriptions = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Suscripciones Proyectadas')
-    projected_credits = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Créditos Proyectados')
-    projected_estimates = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Estimaciones Proyectadas')
-    
-    # Total proyectado
-    total_projected = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Total Proyectado')
+    # Datos futuros proyectados con componentes real y estimado
+    future_real_subscriptions = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Suscripciones Reales Futuras')
+    future_real_credits = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Créditos Reales Futuros')
+    future_estimated_credits = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Créditos Estimados Futuros')
+    future_estimated_other = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Otros Estimados Futuros')
+
+    # Totales futuros bifurcados
+    future_real_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Total Real Futuro')
+    future_estimated_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Total Estimado Futuro')
     
     # Campos de auditoría
     created_at = models.DateTimeField(default=timezone.now, verbose_name='Fecha de Creación')
@@ -323,7 +325,8 @@ class MonthlyForecast(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.month.strftime('%B %Y')} - ${self.total_projected:.2f}"
+        total = self.future_estimated_total or self.current_month_estimated or (self.actual_subscriptions + self.actual_credits + self.actual_other_expenses)
+        return f"{self.month.strftime('%B %Y')} - ${total:.2f}"
     
     @classmethod
     def generate_forecasts(cls, user, months_back=6, months_forward=12):
@@ -332,19 +335,12 @@ class MonthlyForecast(models.Model):
         from subscriptions.models import Subscription
         from .models import ExpenseForecast
 
+        # Delete all existing MonthlyForecast records
+        cls.objects.filter(user=user).delete()
+
         # Create cache key based on user and parameters
         cache_key = f"forecasts_{user.id}_{months_back}_{months_forward}"
-        cached_result = None
-        try:
-            cached_result = cache.get(cache_key)
-        except Exception as e:
-            # Log the error but continue without cache
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Cache get failed for key {cache_key}: {e}")
-
-        if cached_result is not None:
-            return cached_result
+        # Don't check cache during generation - always generate fresh data
 
         today = timezone.now().date()
         current_month = today.replace(day=1)
@@ -371,6 +367,9 @@ class MonthlyForecast(models.Model):
             import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"Cache set failed for key {cache_key}: {e}")
+        
+        # Return the number of forecasts created
+        return cls.objects.filter(user=user).count()
     
     @classmethod
     def _generate_historical_month(cls, user, month_date):
@@ -385,7 +384,7 @@ class MonthlyForecast(models.Model):
         else:
             end_date = month_date.replace(month=month_date.month + 1) - timedelta(days=1)
 
-        expenses = Expense.objects.filter(user=user, date__range=[start_date, end_date])
+        expenses = Expense.objects.filter(date__range=[start_date, end_date])
 
         # Calcular totales por tipo
         subscriptions_total = expenses.filter(subscription__isnull=False).aggregate(
@@ -404,8 +403,7 @@ class MonthlyForecast(models.Model):
             defaults={
                 'actual_subscriptions': subscriptions_total,
                 'actual_credits': credits_total,
-                'actual_other_expenses': other_total,
-                'total_projected': subscriptions_total + credits_total + other_total
+                'actual_other_expenses': other_total
             }
         )
 
@@ -413,7 +411,6 @@ class MonthlyForecast(models.Model):
             forecast.actual_subscriptions = subscriptions_total
             forecast.actual_credits = credits_total
             forecast.actual_other_expenses = other_total
-            forecast.total_projected = subscriptions_total + credits_total + other_total
             forecast.save()
     
     @classmethod
@@ -430,16 +427,20 @@ class MonthlyForecast(models.Model):
         else:
             end_date = month_date.replace(month=month_date.month + 1) - timedelta(days=1)
 
-        # Gastos reales hasta hoy
+        # 1. GASTOS REALES para todo el mes (contado + crédito + suscripciones)
+        # Incluir todos los gastos del mes de TODOS los usuarios
         actual_expenses = Expense.objects.filter(
-            user=user,
-            date__range=[start_date, today]
+            date__range=[start_date, end_date]
         )
         actual_total = actual_expenses.aggregate(
             total=models.Sum('amount'))['total'] or 0
 
-        # Estimación para el mes completo
-        estimated_total = cls._calculate_monthly_estimate(user, month_date)
+        # 2. ESTIMADO para el mes completo
+        # Promedio de gastos totales de los últimos 6 meses
+        avg_total_last_6_months = cls._calculate_average_total_last_6_months(user, month_date)
+        
+        # El estimado es el promedio de los últimos 6 meses
+        estimated_total = avg_total_last_6_months
 
         # Crear o actualizar el registro
         forecast, created = cls.objects.get_or_create(
@@ -447,17 +448,58 @@ class MonthlyForecast(models.Model):
             month=month_date,
             defaults={
                 'current_month_estimated': estimated_total,
-                'current_month_actual': actual_total,
-                'total_projected': estimated_total
+                'current_month_actual': actual_total
             }
         )
 
         if not created:
             forecast.current_month_estimated = estimated_total
             forecast.current_month_actual = actual_total
-            forecast.total_projected = estimated_total
             forecast.save()
     
+    @classmethod
+    def _calculate_average_credit_last_6_months(cls, user, target_month):
+        """Calcular el promedio de gastos en créditos de los últimos 6 meses"""
+        from finances.models import Expense
+
+        # Obtener los últimos 6 meses antes del mes objetivo
+        end_date = target_month - timedelta(days=1)  # Último día del mes anterior
+        start_date = end_date - relativedelta(months=6) + timedelta(days=1)  # Primer día 6 meses atrás
+
+        # Gastos en créditos en ese período
+        credit_expenses = Expense.objects.filter(
+            user=user,
+            is_credit=True,
+            date__range=[start_date, end_date]
+        )
+
+        total_credit = credit_expenses.aggregate(
+            total=models.Sum('amount'))['total'] or 0
+
+        # Promedio mensual
+        return total_credit / 6
+
+    @classmethod
+    def _calculate_average_total_last_6_months(cls, user, target_month):
+        """Calcular el promedio de gastos totales de los últimos 6 meses"""
+        from finances.models import Expense
+
+        # Obtener los últimos 6 meses antes del mes objetivo
+        end_date = target_month - timedelta(days=1)  # Último día del mes anterior
+        start_date = end_date - relativedelta(months=6) + timedelta(days=1)  # Primer día 6 meses atrás
+
+        # Todos los gastos en ese período (contado + crédito + suscripciones)
+        all_expenses = Expense.objects.filter(
+            user=user,
+            date__range=[start_date, end_date]
+        )
+
+        total_amount = all_expenses.aggregate(
+            total=models.Sum('amount'))['total'] or 0
+
+        # Promedio mensual
+        return total_amount / 6
+
     @classmethod
     def _generate_future_month(cls, user, month_date):
         """Generar datos para un mes futuro"""
@@ -465,59 +507,52 @@ class MonthlyForecast(models.Model):
         from subscriptions.models import Subscription
         from .models import ExpenseForecast
 
-        # Proyecciones de suscripciones
+        # 1. GASTOS REALES: Suscripciones + Cuotas de créditos reales
+        # Suscripciones activas
         subscriptions = Subscription.objects.filter(user=user, status='active')
-        subscriptions_total = sum(sub.get_monthly_amount() for sub in subscriptions)
+        real_subscriptions = sum(sub.get_monthly_amount() for sub in subscriptions)
 
-        # Proyecciones de créditos - FIXED LOGIC
-        # Find all ongoing credit installments
-        ongoing_credits = Expense.objects.filter(
-            user=user,
-            is_credit=True,
-            remaining_amount__gt=0
+        # Gastos reales para ese mes específico (igual que el filtro de finanzas)
+        # Incluir TODOS los gastos del mes de TODOS los usuarios
+        month_expenses = Expense.objects.filter(
+            date__year=month_date.year,
+            date__month=month_date.month
         )
+        
+        real_credits = 0
+        for expense in month_expenses:
+            real_credits += expense.amount
 
-        credits_total = 0
-        current_date = timezone.now().date()
-        current_month_start = current_date.replace(day=1)
+        # Total real para ese mes
+        real_total = real_subscriptions + real_credits
 
-        for credit in ongoing_credits:
-            if credit.total_credit_amount and credit.installments and credit.current_installment < credit.installments:
-                # Calculate monthly installment amount
-                monthly_installment = credit.total_credit_amount / credit.installments
-                remaining_installments = credit.installments - credit.current_installment
-
-                # Calculate months from current month to target month
-                months_diff = (month_date.year - current_month_start.year) * 12 + (month_date.month - current_month_start.month)
-
-                # If this future month falls within the remaining installments period
-                if months_diff >= 0 and months_diff < remaining_installments:
-                    credits_total += monthly_installment
-
-
-        # Proyecciones de estimaciones activas
-        estimates = ExpenseForecast.objects.filter(user=user, is_active=True)
-        estimates_total = sum(est.get_forecast_for_month(month_date.year, month_date.month) for est in estimates)
-
-        total_projected = subscriptions_total + credits_total + estimates_total
+        # 2. ESTIMADO: Promedio de gastos totales de los últimos 6 meses
+        avg_total_last_6_months = cls._calculate_average_total_last_6_months(user, month_date)
+        
+        # 3. ESTIMADO DINÁMICO: max(promedio - gastos_reales_del_mes, 0)
+        estimated_amount = max(float(avg_total_last_6_months) - float(real_total), 0)
 
         # Crear o actualizar el registro
         forecast, created = cls.objects.get_or_create(
             user=user,
             month=month_date,
             defaults={
-                'projected_subscriptions': subscriptions_total,
-                'projected_credits': credits_total,
-                'projected_estimates': estimates_total,
-                'total_projected': total_projected
+                'future_real_subscriptions': real_subscriptions,
+                'future_real_credits': real_credits,
+                'future_estimated_credits': 0,  # No usamos más este campo
+                'future_estimated_other': estimated_amount,  # Aquí va el estimado dinámico
+                'future_real_total': real_total,
+                'future_estimated_total': float(real_total) + estimated_amount
             }
         )
 
         if not created:
-            forecast.projected_subscriptions = subscriptions_total
-            forecast.projected_credits = credits_total
-            forecast.projected_estimates = estimates_total
-            forecast.total_projected = total_projected
+            forecast.future_real_subscriptions = real_subscriptions
+            forecast.future_real_credits = real_credits
+            forecast.future_estimated_credits = 0
+            forecast.future_estimated_other = estimated_amount
+            forecast.future_real_total = real_total
+            forecast.future_estimated_total = float(real_total) + estimated_amount
             forecast.save()
     
     @classmethod
@@ -550,11 +585,16 @@ class MonthlyForecast(models.Model):
     def get_total_actual(self):
         """Obtener total real del mes"""
         return self.actual_subscriptions + self.actual_credits + self.actual_other_expenses
-    
+
     def get_total_projected(self):
         """Obtener total proyectado del mes"""
-        return self.projected_subscriptions + self.projected_credits + self.projected_estimates
-    
+        if self.future_estimated_total > 0:
+            return self.future_estimated_total
+        elif self.current_month_estimated > 0:
+            return self.current_month_estimated
+        else:
+            return self.get_total_actual()
+
     def get_accuracy_percentage(self):
         """Obtener porcentaje de precisión (solo para meses completos)"""
         if self.current_month_estimated > 0:

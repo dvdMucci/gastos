@@ -55,6 +55,11 @@ function copyToClipboard(text) {
                             <i class="fas fa-chart-line"></i> Estimaciones
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'security:blocked_ips' %}">
+                            <i class="fas fa-shield-alt"></i> Seguridad
+                        </a>
+                    </li>
 
                     {% if user.can_manage_users %}
                     <li class="nav-item">

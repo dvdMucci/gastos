@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}Lista Blanca de IPs{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1><i class="fas fa-shield-alt"></i> Lista Blanca de IPs</h1>
+                <a href="{% url 'security:blocked_ips' %}" class="btn btn-outline-danger">
+                    <i class="fas fa-ban"></i> IPs Bloqueadas
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulario para agregar nueva IP -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-plus"></i> Agregar IP a Lista Blanca</h5>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            {{ form.ip.label_tag }}
+                            {{ form.ip }}
+                            {% if form.ip.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.ip.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            {{ form.reason.label_tag }}
+                            {{ form.reason }}
+                            {% if form.reason.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.reason.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Agregar IP
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>IP</th>
+                            <th>Agregado por</th>
+                            <th>Fecha</th>
+                            <th>Razón</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for whitelisted_ip in whitelisted_ips %}
+                        <tr>
+                            <td>{{ whitelisted_ip.ip }}</td>
+                            <td>{{ whitelisted_ip.added_by.username }}</td>
+                            <td>{{ whitelisted_ip.date_added|date:"d/m/Y H:i" }}</td>
+                            <td>{{ whitelisted_ip.reason }}</td>
+                            <td>
+                                <form method="post" action="{% url 'security:remove_whitelist' whitelisted_ip.id %}" style="display: inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                                        <i class="fas fa-trash"></i> Remover
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4">
+                                <div class="text-muted">
+                                    <i class="fas fa-list fa-2x mb-2"></i>
+                                    <p>No hay IPs en la lista blanca</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
