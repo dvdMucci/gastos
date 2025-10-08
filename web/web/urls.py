@@ -15,6 +15,7 @@ urlpatterns = [
     path('subscriptions/', include('subscriptions.urls')), # Incluye las URLs de la aplicación 'subscriptions'
     path('forecasts/', include('forecasts.urls')), # Incluye las URLs de la aplicación 'forecasts'
     path('security/', include('security.urls'), name='security'), # Incluye las URLs de la aplicación 'security'
+    path('api/security/', include('security.api_urls')), # API endpoints for security
 
     # API authentication
     path('api-auth/', include('rest_framework.urls')),

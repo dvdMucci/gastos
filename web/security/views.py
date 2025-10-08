@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.core.cache import cache
 from django.urls import reverse
-from .models import WhitelistedIP
+from .models import WhitelistedIP, BlockedIP
 from .forms import WhitelistedIPForm
 
 @login_required
@@ -33,12 +33,14 @@ def whitelisted_ips(request):
 @user_passes_test(lambda u: u.user_type == 'admin')
 def blocked_ips(request):
     """
-    Vista para mostrar IPs bloqueadas temporalmente (desde cache)
+    Vista para mostrar IPs bloqueadas
     """
-    # Para simplificar, mostramos una lista vacía ya que
-    # las IPs bloqueadas se manejan en cache y no tenemos
-    # una forma fácil de listar todas las claves desde Django
-    blocked_ips = []
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("blocked_ips view called")
+
+    blocked_ips = BlockedIP.objects.all()
+    logger.info(f"blocked_ips count: {blocked_ips.count()}")
 
     return render(request, 'security/blocked_ips.html', {
         'blocked_ips': blocked_ips
@@ -93,3 +95,18 @@ def whitelist_ip(request, ip):
 
         messages.success(request, f'IP {actual_ip} agregada a la lista blanca.')
     return redirect('security:blocked_ips')
+
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from .models import WhitelistedIP, BlockedIP
+from .serializers import WhitelistedIPSerializer, BlockedIPSerializer
+
+class WhitelistedIPViewSet(viewsets.ModelViewSet):
+    queryset = WhitelistedIP.objects.all()
+    serializer_class = WhitelistedIPSerializer
+    permission_classes = [IsAuthenticated]
+
+class BlockedIPViewSet(viewsets.ModelViewSet):
+    queryset = BlockedIP.objects.all()
+    serializer_class = BlockedIPSerializer
+    permission_classes = [IsAuthenticated]

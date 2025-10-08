@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load security_filters %}
 
 {% block title %}IPs Bloqueadas{% endblock %}
 
@@ -35,13 +36,13 @@
                             <td>Desconocido</td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <form method="post" action="{% url 'security:unblock_ip' blocked_ip.id %}" style="display: inline;">
+                                    <form method="post" action="{% url 'security:unblock_ip' blocked_ip.ip|replace:'.,_' %}" style="display: inline;">
                                         {% csrf_token %}
                                         <button type="submit" class="btn btn-outline-success btn-sm">
                                             <i class="fas fa-unlock"></i> Desbloquear
                                         </button>
                                     </form>
-                                    <form method="post" action="{% url 'security:whitelist_ip' blocked_ip.id %}" style="display: inline;">
+                                    <form method="post" action="{% url 'security:whitelist_ip' blocked_ip.ip|replace:'.,_' %}" style="display: inline;">
                                         {% csrf_token %}
                                         <button type="submit" class="btn btn-outline-primary btn-sm">
                                             <i class="fas fa-plus"></i> Lista Blanca

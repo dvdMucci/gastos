@@ -22,7 +22,7 @@ SECRET_KEY = env('DJANGO_SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['gastos.sverina.com.ar', 'localhost', '172.26.0.1']
 
 
 # Application definition
@@ -149,7 +149,7 @@ LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 # OTP Settings
-OTP_TOTP_ISSUER = 'LCC OT' # Nombre del emisor para la aplicación 2FA
+OTP_TOTP_ISSUER = 'Gastos Casita' # Nombre del emisor para la aplicación 2FA
 OTP_LOGIN_URL = '/accounts/login/' # URL de login para OTP
 
 # Redis Cache Configuration
@@ -178,3 +178,42 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+CSRF_TRUSTED_ORIGINS = ['https://gastos.sverina.com.ar']  # Añadir dominios de confianza para CSRF
+
+# Configuraciones de Seguridad para Producción
+if not DEBUG:
+    # Seguridad HTTPS
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_HSTS_SECONDS = 31536000  # 1 año
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    
+    # Cookies seguras
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    
+    # Headers de seguridad
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = 'DENY'
+    
+    # Configuración de logging para intentos maliciosos
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'handlers': {
+            'security_file': {
+                'level': 'WARNING',
+                'class': 'logging.FileHandler',
+                'filename': '/app/logs/security.log',
+            },
+        },
+        'loggers': {
+            'django.security': {
+                'handlers': ['security_file'],
+                'level': 'WARNING',
+                'propagate': True,
+            },
+        },
+    }

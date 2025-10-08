@@ -3,6 +3,41 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+class BlockedIP(models.Model):
+    """
+    Modelo para IPs bloqueadas por actividad sospechosa
+    """
+    ip = models.CharField(
+        max_length=15,
+        verbose_name='Dirección IP',
+        help_text='Dirección IP bloqueada'
+    )
+    reason = models.TextField(
+        default='Actividad sospechosa',
+        verbose_name='Razón',
+        help_text='Razón del bloqueo'
+    )
+    blocked_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Fecha de bloqueo'
+    )
+    blocked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        verbose_name='Bloqueado por',
+        related_name='blocked_ips'
+    )
+
+    class Meta:
+        verbose_name = 'IP Bloqueada'
+        verbose_name_plural = 'IPs Bloqueadas'
+        ordering = ['-blocked_at']
+
+    def __str__(self):
+        return f"{self.ip} - {self.reason}"
+
 class WhitelistedIP(models.Model):
     """
     Modelo para IPs en lista blanca que no serán bloqueadas por el middleware de seguridad
