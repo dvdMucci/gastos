@@ -22,7 +22,7 @@ SECRET_KEY = env('DJANGO_SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['gastos.sverina.com.ar', 'localhost', '172.26.0.1']
+ALLOWED_HOSTS = ['gastos.sverina.com.ar', 'localhost', '172.26.0.1','192.168.208.6']
 
 
 # Application definition
