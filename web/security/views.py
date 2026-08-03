@@ -67,8 +67,9 @@ def unblock_ip(request, ip):
     if request.method == 'POST':
         # Convertir el ID de vuelta a IP (reemplazar _ por .)
         actual_ip = ip.replace('_', '.')
-        cache_key = f"blocked_ip_{actual_ip}"
-        cache.delete(cache_key)
+        cache.delete(f"blocked_ip_{actual_ip}")
+        # También se borra el registro, si no la IP sigue figurando bloqueada.
+        BlockedIP.objects.filter(ip=actual_ip).delete()
         messages.success(request, f'IP {actual_ip} desbloqueada.')
     return redirect('security:blocked_ips')
 
@@ -82,15 +83,17 @@ def whitelist_ip(request, ip):
         # Convertir el ID de vuelta a IP
         actual_ip = ip.replace('_', '.')
 
-        # Remover del cache de bloqueados
-        cache_key = f"blocked_ip_{actual_ip}"
-        cache.delete(cache_key)
+        # Remover del cache de bloqueados y del registro
+        cache.delete(f"blocked_ip_{actual_ip}")
+        BlockedIP.objects.filter(ip=actual_ip).delete()
 
         # Agregar a lista blanca
-        WhitelistedIP.objects.create(
+        WhitelistedIP.objects.get_or_create(
             ip=actual_ip,
-            added_by=request.user,
-            reason='Agregada desde IPs bloqueadas'
+            defaults={
+                'added_by': request.user,
+                'reason': 'Agregada desde IPs bloqueadas',
+            }
         )
 
         messages.success(request, f'IP {actual_ip} agregada a la lista blanca.')

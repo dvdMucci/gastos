@@ -1,7 +1,11 @@
+from django.core.cache import cache
 from django.db import models
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
+
+# Debe coincidir con la clave que usa core.security_middleware
+WHITELIST_CACHE_KEY = 'security_whitelisted_ips'
 
 class BlockedIP(models.Model):
     """
@@ -70,3 +74,13 @@ class WhitelistedIP(models.Model):
 
     def __str__(self):
         return f"{self.ip} - {self.reason or 'Sin razón especificada'}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # El middleware cachea la lista blanca; hay que invalidarla para que
+        # el cambio tenga efecto de inmediato y no en 5 minutos.
+        cache.delete(WHITELIST_CACHE_KEY)
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        cache.delete(WHITELIST_CACHE_KEY)
