@@ -11,6 +11,7 @@ import json
 from .models import ExpenseForecast, MonthlyForecast
 from finances.models import Expense
 from .forms import ExpenseForecastForm, ForecastFilterForm, ExpenseForecastFilterForm, MonthSelectorForm
+from dateutil.relativedelta import relativedelta
 
 @login_required
 def forecast_dashboard(request):
@@ -23,6 +24,21 @@ def forecast_dashboard(request):
 
     # Obtener estimaciones mensuales
     monthly_forecasts = MonthlyForecast.objects.filter(user=request.user).order_by('month')
+    
+    # Obtener desglose por categoría con análisis de tendencia y confianza
+    try:
+        category_analysis = MonthlyForecast._calculate_category_based_estimate(
+            request.user, 
+            timezone.now().date().replace(day=1),
+            return_breakdown=True
+        )
+    except Exception as e:
+        logger.warning(f"Error obteniendo análisis por categoría: {e}")
+        category_analysis = {
+            'total_estimate': 0,
+            'category_breakdown': {},
+            'detected_categories': {},
+        }
 
     # Obtener estimaciones activas con relaciones optimizadas
     active_forecasts = ExpenseForecast.objects.filter(user=request.user, is_active=True).select_related(
@@ -136,14 +152,74 @@ def forecast_dashboard(request):
             real_totals_data.append(real)
             estimated_totals_data.append(real + estimated)
         else:
-            # MESES FUTUROS: Gastos reales (suscripciones + cuotas) + estimado dinámico
-            real = float(forecast.future_real_total or 0)  # Suscripciones + cuotas reales
-            estimated = float(forecast.future_estimated_other or 0)  # Estimado dinámico
+            # MESES FUTUROS: Gastos reales (suscripciones + gastos reales) + estimado dinámico
+            real = float(forecast.future_real_total or 0)  # Suscripciones + gastos reales del mes
+            estimated = float(forecast.future_estimated_other or 0)  # Estimado dinámico (diferencia para llegar al promedio)
+            # El total estimado ya está calculado correctamente en el modelo (promedio de últimos 6 meses)
+            total_estimated = float(forecast.future_estimated_total or 0)  # Total estimado = promedio de últimos 6 meses
             real_data.append(real)
             estimated_data.append(estimated)
             real_totals_data.append(real)
-            estimated_totals_data.append(real + estimated)
-    
+            estimated_totals_data.append(total_estimated)  # Línea de máximos = promedio de últimos 6 meses
+
+    # Ingresos: últimos 6 meses reales, mes actual y 12 futuros = promedio de esos 6 meses
+    income_line_data = [0] * len(chart_labels)
+    income_current_month_value = 0.0
+    income_avg_6m = 0.0
+    current_month_index = None
+    try:
+        from income.models import Income
+        start_6m, end_6m = MonthlyForecast._get_last_6_complete_months_range()
+        income_by_month_6 = []
+        for i in range(6):
+            month_start = (end_6m - relativedelta(months=5 - i)).replace(day=1)
+            if month_start.month == 12:
+                month_end = month_start.replace(year=month_start.year + 1, month=1) - timedelta(days=1)
+            else:
+                month_end = month_start.replace(month=month_start.month + 1) - timedelta(days=1)
+            total = Income.objects.filter(
+                user=request.user,
+                date__range=[month_start, month_end]
+            ).aggregate(total=Sum('amount'))['total'] or 0
+            income_by_month_6.append(float(total))
+        income_avg_6m = sum(income_by_month_6) / 6 if income_by_month_6 else 0.0
+
+        income_line_data = []
+        income_current_month_value = 0.0
+        current_month_index = None
+        today = timezone.now().date()
+        for idx, forecast in enumerate(monthly_forecasts):
+            if forecast.month < current_month:
+                if idx < 6:
+                    income_line_data.append(income_by_month_6[idx])
+                else:
+                    income_line_data.append(0)
+            elif forecast.month == current_month:
+                current_month_index = idx
+                income_line_data.append(income_avg_6m)
+                month_start = current_month
+                if current_month.month == 12:
+                    month_end = current_month.replace(year=current_month.year + 1, month=1) - timedelta(days=1)
+                else:
+                    month_end = current_month.replace(month=current_month.month + 1) - timedelta(days=1)
+                income_current_month_value = Income.objects.filter(
+                    user=request.user,
+                    date__range=[month_start, today]
+                ).aggregate(total=Sum('amount'))['total'] or 0
+                income_current_month_value = float(income_current_month_value)
+            else:
+                income_line_data.append(income_avg_6m)
+
+        while len(income_line_data) < len(chart_labels):
+            income_line_data.append(income_avg_6m if len(income_line_data) > 6 else 0)
+        income_line_data = income_line_data[:len(chart_labels)]
+    except Exception as e:
+        logger.warning(f"Error calculando datos de ingresos para el gráfico: {e}")
+        income_line_data = [0] * len(chart_labels)
+        income_current_month_value = 0.0
+        income_avg_6m = 0.0
+        current_month_index = None
+
     # Preparar valores para el formulario
     selected_year = str(selected_month.year) if selected_month else None
     selected_month_num = str(selected_month.month) if selected_month else None
@@ -173,6 +249,16 @@ def forecast_dashboard(request):
         'selected_month_num': selected_month_num,
         'category_labels': json.dumps(category_labels),
         'category_data': json.dumps(category_data),
+        'category_analysis': category_analysis,
+        'category_breakdown': json.dumps(category_analysis.get('category_breakdown', {})),
+        'detected_categories': json.dumps(category_analysis.get('detected_categories', {})),
+        'income_line_data': json.dumps(income_line_data),
+        'income_current_month_value': income_current_month_value,
+        'income_current_month_value_json': json.dumps(income_current_month_value),
+        'income_avg_6m': income_avg_6m,
+        'income_avg_6m_json': json.dumps(income_avg_6m),
+        'current_month_index': current_month_index,
+        'current_month_index_json': json.dumps(current_month_index) if current_month_index is not None else 'null',
     }
     return render(request, 'forecasts/dashboard.html', context)
 

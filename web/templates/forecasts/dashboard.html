@@ -74,6 +74,14 @@
                         </label>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="show-income" checked>
+                        <label class="form-check-label" for="show-income">
+                            <i class="fas fa-wallet"></i> Ingresos
+                        </label>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -181,6 +189,7 @@
                     <li><strong>Mes actual:</strong> Gastos reales hasta hoy + solo la diferencia estimada restante</li>
                     <li><strong>Meses futuros:</strong> Gastos reales (suscripciones + cuotas) + estimado dinámico basado en el promedio de los últimos 6 meses</li>
                     <li><strong>Líneas de tendencia:</strong> Conectan los máximos reales y estimados para mostrar la evolución</li>
+                    <li><strong>Ingresos:</strong> Últimos 6 meses con valores reales; mes actual y 12 futuros con el promedio de esos 6 meses. En el mes actual, el punto y la raya indican el ingreso acumulado hasta hoy.</li>
                 </ul>
             </div>
             <div id="chart-loading" class="text-center py-4">
@@ -210,6 +219,46 @@
                     <p class="text-muted">Los datos se muestran para gastos reales (excluyendo créditos y suscripciones).</p>
                 </div>
             {% endif %}
+        </div>
+    </div>
+
+    <!-- Análisis Detallado por Categoría con Tendencias y Confianza -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-analytics"></i> Análisis de Estimación por Categoría
+                <small class="text-muted">(Basado en últimos 6 meses)</small>
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info mb-3">
+                <h6><i class="fas fa-info-circle"></i> Información del Análisis:</h6>
+                <ul class="mb-0 small">
+                    <li><strong>Detección Automática:</strong> El sistema identifica automáticamente categorías recurrentes</li>
+                    <li><strong>Tendencia:</strong> Indica si los gastos están aumentando (↑), disminuyendo (↓) o estables (→)</li>
+                    <li><strong>Confianza:</strong> Nivel de confiabilidad de la estimación basado en variabilidad histórica</li>
+                    <li><strong>Tipo:</strong> Categorías fijas (más predecibles) vs variables (promedio ponderado)</li>
+                </ul>
+            </div>
+            
+            <div id="category-analysis-container">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Categoría</th>
+                                <th>Estimación Mensual</th>
+                                <th>Tipo</th>
+                                <th>Tendencia</th>
+                                <th>Confianza</th>
+                            </tr>
+                        </thead>
+                        <tbody id="category-analysis-body">
+                            <!-- Se llenará con JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -304,7 +353,8 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Timeout para mostrar error si el gráfico no carga
@@ -314,7 +364,15 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingElement.innerHTML = '<div class="alert alert-warning">El gráfico está tardando en cargar. <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">Recargar página</button></div>';
         }
     }, 5000); // 5 segundos timeout
-    
+
+    const currentMonthIndex = {{ current_month_index_json|safe }};
+    const incomeCurrentMonthValue = {{ income_current_month_value_json|safe }};
+    const incomeAvg6m = {{ income_avg_6m_json|safe }};
+    const incomeLineData = {{ income_line_data|safe }};
+    const incomeCurrentMonthPointData = incomeLineData.map(function(_, i) {
+        return (currentMonthIndex !== null && i === currentMonthIndex) ? incomeCurrentMonthValue : null;
+    });
+
     // Datos del gráfico - Versión corregida
     const chartData = {
         labels: {{ chart_labels|safe }},
@@ -332,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: {{ estimated_data|safe }},
                 backgroundColor: 'rgba(255, 193, 7, 0.8)',
                 borderColor: 'rgba(255, 193, 7, 1)',
-                borderWidth: 1,
+                borderWidth: 2, // Aumentar grosor del borde para mejor visibilidad
                 stack: 'main'
             },
             {
@@ -366,22 +424,57 @@ document.addEventListener('DOMContentLoaded', function() {
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
                 yAxisID: 'y'
+            },
+            {
+                label: 'Ingresos (6m real + promedio)',
+                data: incomeLineData,
+                type: 'line',
+                borderColor: 'rgba(23, 162, 184, 1)',
+                backgroundColor: 'rgba(23, 162, 184, 0.1)',
+                borderWidth: 3,
+                fill: false,
+                tension: 0.4,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: 'rgba(23, 162, 184, 1)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                yAxisID: 'y'
+            },
+            {
+                label: 'Ingreso mes actual',
+                data: incomeCurrentMonthPointData,
+                type: 'line',
+                borderColor: 'rgba(23, 162, 184, 0.8)',
+                borderDash: [5, 5],
+                backgroundColor: 'rgba(23, 162, 184, 0)',
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 6,
+                pointHoverRadius: 8,
+                pointBackgroundColor: 'rgba(23, 162, 184, 1)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                spanGaps: true,
+                yAxisID: 'y'
             }
         ]
     };
 
-    // Calcular el valor máximo de todos los datos para auto-ajustar la escala
+    // Calcular el valor máximo de todos los datos (incl. líneas de ingresos) para una sola escala
     let maxValue = 0;
-    chartData.datasets.forEach(dataset => {
-        dataset.data.forEach(value => {
-            if (value && value > maxValue) {
-                maxValue = value;
+    chartData.datasets.forEach(function(dataset) {
+        dataset.data.forEach(function(value) {
+            var num = Number(value);
+            if (!isNaN(num) && num > maxValue) {
+                maxValue = num;
             }
         });
     });
-    
-    // Agregar un 15% de margen superior para mejor visualización
-    const yAxisMax = maxValue * 1.15;
+    if (maxValue <= 0) maxValue = 1;
+
+    // Margen superior para que las líneas no se peguen al borde
+    var yAxisMax = maxValue * 1.15;
     
     console.log('Max value found:', maxValue);
     console.log('Y-axis max set to:', yAxisMax);
@@ -395,13 +488,43 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const ctx = canvas.getContext('2d');
     
-    // Debug: Log chart data
+    // Debug: Log chart data con análisis detallado
     console.log('Chart Data:', chartData);
     console.log('Labels:', chartData.labels);
     console.log('Datasets:', chartData.datasets);
     
+    // Análisis específico de estimated_data para meses futuros
+    const estimatedData = chartData.datasets[1].data;
+    const labels = chartData.labels;
+    console.log('\n=== Análisis de Estimado Dinámico (barras amarillas) ===');
+    estimatedData.forEach((value, index) => {
+        if (value > 0) {
+            console.log(`${labels[index]}: $${value.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
+        }
+    });
+    
+    // Verificar si hay valores duplicados
+    const uniqueValues = [...new Set(estimatedData.filter(v => v > 0))];
+    console.log(`\nValores únicos de estimado: ${uniqueValues.length}`);
+    if (uniqueValues.length < estimatedData.filter(v => v > 0).length) {
+        console.warn('⚠️ ADVERTENCIA: Hay valores duplicados en estimated_data');
+        const valueCounts = {};
+        estimatedData.forEach(v => {
+            if (v > 0) {
+                const key = v.toFixed(2);
+                valueCounts[key] = (valueCounts[key] || 0) + 1;
+            }
+        });
+        Object.entries(valueCounts).forEach(([val, count]) => {
+            if (count > 1) {
+                console.warn(`  $${parseFloat(val).toLocaleString()}: aparece ${count} veces`);
+            }
+        });
+    }
+    
+    var chart = null;
     try {
-        const chart = new Chart(ctx, {
+        chart = new Chart(ctx, {
             type: 'bar',
             data: chartData,
             options: {
@@ -425,8 +548,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     },
                     y: {
                         stacked: true,
+                        min: 0,
+                        max: yAxisMax,
                         beginAtZero: true,
-                        max: yAxisMax, // Usar el valor calculado dinámicamente
                         ticks: {
                             maxTicksLimit: 8,
                             callback: function(value) {
@@ -446,13 +570,64 @@ document.addEventListener('DOMContentLoaded', function() {
                         intersect: false,
                         callbacks: {
                             label: function(context) {
-                                return context.dataset.label + ': $' + context.parsed.y.toLocaleString();
+                                let label = context.dataset.label || '';
+                                let value = context.parsed.y;
+                                
+                                // Formatear con más precisión
+                                if (value >= 1000000) {
+                                    return label + ': $' + (value / 1000000).toFixed(2) + 'M';
+                                } else if (value >= 1000) {
+                                    return label + ': $' + (value / 1000).toFixed(2) + 'K';
+                                }
+                                return label + ': $' + value.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            },
+                            footer: function(tooltipItems) {
+                                // Mostrar total de la barra apilada
+                                let total = 0;
+                                tooltipItems.forEach(function(tooltipItem) {
+                                    if (tooltipItem.datasetIndex < 2) { // Solo barras, no líneas
+                                        total += tooltipItem.parsed.y || 0;
+                                    }
+                                });
+                                if (total > 0) {
+                                    if (total >= 1000000) {
+                                        return 'Total: $' + (total / 1000000).toFixed(2) + 'M';
+                                    } else if (total >= 1000) {
+                                        return 'Total: $' + (total / 1000).toFixed(2) + 'K';
+                                    }
+                                    return 'Total: $' + total.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                }
+                                return '';
                             }
                         }
                     },
                     legend: {
                         display: true,
                         position: 'top'
+                    },
+                    annotation: {
+                        annotations: (function() {
+                            var ann = {};
+                            if (currentMonthIndex !== null && currentMonthIndex >= 0) {
+                                var yLo = Math.min(incomeAvg6m, incomeCurrentMonthValue);
+                                var yHi = Math.max(incomeAvg6m, incomeCurrentMonthValue);
+                                if (yLo !== yHi || incomeCurrentMonthValue > 0) {
+                                    ann.rayaIngreso = {
+                                        type: 'line',
+                                        xMin: currentMonthIndex,
+                                        xMax: currentMonthIndex,
+                                        xScaleID: 'x',
+                                        yMin: yLo,
+                                        yMax: yHi,
+                                        yScaleID: 'y',
+                                        borderColor: 'rgba(23, 162, 184, 0.8)',
+                                        borderWidth: 2,
+                                        borderDash: [5, 5]
+                                    };
+                                }
+                            }
+                            return ann;
+                        })()
                     }
                 },
                 animation: {
@@ -463,6 +638,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     bar: {
                         borderRadius: 4,
                         borderSkipped: false,
+                        // Asegurar que las barras muestren diferencias visuales
+                        maxBarThickness: 50,
+                        minBarLength: 2,
+                    }
+                },
+                // Mejorar la visualización de diferencias pequeñas
+                onHover: (event, activeElements) => {
+                    if (activeElements.length > 0) {
+                        const datasetIndex = activeElements[0].datasetIndex;
+                        const index = activeElements[0].index;
+                        if (datasetIndex === 1) { // Dataset de estimado dinámico
+                            const value = chartData.datasets[1].data[index];
+                            console.log(`Estimado Dinámico para ${chartData.labels[index]}: $${value.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
+                        }
                     }
                 }
             }
@@ -487,11 +676,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     } catch (error) {
         console.error('Error creating chart:', error);
-        const loadingElement = document.getElementById('chart-loading');
-        if (loadingElement) {
-            loadingElement.innerHTML = '<div class="alert alert-danger">Error al crear el gráfico: ' + error.message + '</div>';
+        clearTimeout(chartTimeout);
+        var loadingEl = document.getElementById('chart-loading');
+        if (loadingEl) {
+            loadingEl.style.display = 'block';
+            loadingEl.innerHTML = '<div class="alert alert-danger">Error al crear el gráfico: ' + (error && error.message ? error.message : String(error)) + '. <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">Recargar página</button></div>';
         }
-        return;
     }
 
     // Filtros del gráfico (4 datasets: 2 barras + 2 líneas)
@@ -519,6 +709,14 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('show-estimated-line').addEventListener('change', function() {
         if (chart && chart.getDatasetMeta(3)) {
             chart.getDatasetMeta(3).hidden = !this.checked;
+            chart.update();
+        }
+    });
+
+    document.getElementById('show-income').addEventListener('change', function() {
+        if (chart && chart.getDatasetMeta(4)) {
+            chart.getDatasetMeta(4).hidden = !this.checked;
+            if (chart.getDatasetMeta(5)) chart.getDatasetMeta(5).hidden = !this.checked;
             chart.update();
         }
     });
@@ -608,6 +806,92 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+
+    // Mostrar análisis por categoría
+    try {
+        const categoryBreakdown = {{ category_breakdown|safe }};
+        const detectedCategories = {{ detected_categories|safe }};
+        const tbody = document.getElementById('category-analysis-body');
+        
+        if (tbody && categoryBreakdown) {
+            // Ordenar por monto descendente
+            const sortedCategories = Object.entries(categoryBreakdown)
+                .sort((a, b) => b[1].amount - a[1].amount);
+            
+            sortedCategories.forEach(([catName, catData]) => {
+                const row = document.createElement('tr');
+                
+                // Icono de tendencia
+                let trendIcon = '→';
+                let trendClass = 'text-secondary';
+                let trendText = 'Estable';
+                
+                if (catData.trend) {
+                    if (catData.trend.direction === 'increasing') {
+                        trendIcon = '↑';
+                        trendClass = 'text-danger';
+                        trendText = `Aumentando ${catData.trend.percentage.toFixed(1)}%`;
+                    } else if (catData.trend.direction === 'decreasing') {
+                        trendIcon = '↓';
+                        trendClass = 'text-success';
+                        trendText = `Disminuyendo ${catData.trend.percentage.toFixed(1)}%`;
+                    }
+                }
+                
+                // Badge de confianza
+                let confidenceBadge = 'secondary';
+                let confidenceText = 'Media';
+                if (catData.confidence_level === 'high') {
+                    confidenceBadge = 'success';
+                    confidenceText = 'Alta';
+                } else if (catData.confidence_level === 'low') {
+                    confidenceBadge = 'warning';
+                    confidenceText = 'Baja';
+                }
+                
+                // Tipo de categoría
+                let typeText = 'Otros';
+                let typeBadge = 'secondary';
+                if (catData.type === 'monthly_fixed') {
+                    typeText = 'Fija Mensual';
+                    typeBadge = 'primary';
+                } else if (catData.type === 'variable_recurrent') {
+                    typeText = 'Variable Recurrente';
+                    typeBadge = 'info';
+                }
+                
+                row.innerHTML = `
+                    <td><strong>${catName}</strong></td>
+                    <td>$${catData.amount.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td><span class="badge bg-${typeBadge}">${typeText}</span></td>
+                    <td>
+                        <span class="${trendClass}" title="${trendText}">
+                            <strong>${trendIcon}</strong> ${trendText}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge bg-${confidenceBadge}">${confidenceText}</span>
+                        <small class="text-muted">(${(catData.confidence * 100).toFixed(0)}%)</small>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+            
+            // Si no hay categorías, mostrar mensaje
+            if (sortedCategories.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">
+                            <i class="fas fa-info-circle"></i> No hay datos de análisis disponibles
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('Error mostrando análisis por categoría:', error);
+    }
 });
 </script>
 {% endblock %}

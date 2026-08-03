@@ -27,7 +27,7 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-    container_name: django_web_app
+    container_name: django-web-app
     restart: always
     volumes:
       - ./web:/app  # Mapea tu código local para desarrollo en tiempo real
@@ -41,6 +41,19 @@ services:
       DJANGO_SUPERUSER_USERNAME: admin
       DJANGO_SUPERUSER_EMAIL: admin@example.com
       DJANGO_SUPERUSER_PASSWORD: admin123
+    networks:
+      - default
+      - n8n_net
+      - nginx_net
     depends_on:
       - db # No intentes iniciar la web hasta que la base de datos esté lista
       - redis # No intentes iniciar la web hasta que Redis esté listo
+
+networks:
+  default: {}
+  n8n_net:
+    external: true
+    name: n8n_default
+  nginx_net:
+    external: true
+    name: ngnixproxymanager_default
