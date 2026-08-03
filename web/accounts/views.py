@@ -1,9 +1,13 @@
+import logging
+import secrets
+
 from django.shortcuts import render, redirect, get_object_or_404
+from django.conf import settings
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.core.paginator import Paginator
 from django.db.models import Sum
 from django.utils import timezone
@@ -23,6 +27,9 @@ from .forms import CustomUserCreationForm, ProfileForm, LoginForm, ChangePasswor
 from .serializers import UserSerializer
 from income.models import Income
 
+logger = logging.getLogger(__name__)
+
+
 def login_view(request):
     if request.method == 'POST':
         form = LoginForm(request.POST, request=request)
@@ -36,7 +43,12 @@ def login_view(request):
     return render(request, 'accounts/login.html', {'form': form})
 
 @login_required
+@require_POST
 def logout_view(request):
+    """
+    Cierra la sesión. Sólo por POST: por GET, cualquier página externa podía
+    cerrarle la sesión al usuario con un simple <img src="...">.
+    """
     logout(request)
     return redirect('login')
 
@@ -238,7 +250,36 @@ def change_password(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def verify_user_by_telegram_chat_id(request):
-    """API endpoint to verify user by telegram_chat_id and return user details"""
+    """
+    Verifica un usuario por su telegram_chat_id y devuelve su token de API.
+
+    Lo consume el workflow Gastos2 de n8n. Como devuelve una credencial de
+    acceso, exige el secreto compartido en el header X-API-Key: sin él,
+    cualquiera podría pedir un token probando chat_ids de Telegram.
+    """
+    expected_secret = getattr(settings, 'N8N_API_SECRET', '')
+
+    if not expected_secret:
+        # Sin secreto configurado el endpoint queda cerrado, no abierto.
+        logger.error('N8N_API_SECRET no está configurado; se rechaza la petición')
+        return Response(
+            {'error': 'Endpoint no disponible'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
+    provided_secret = request.headers.get('X-API-Key', '')
+
+    # compare_digest evita filtrar el secreto por diferencia de tiempos.
+    if not secrets.compare_digest(provided_secret, expected_secret):
+        logger.warning(
+            'Intento de acceso a verify-user sin secreto válido desde %s',
+            request.META.get('REMOTE_ADDR', 'desconocido')
+        )
+        return Response(
+            {'error': 'No autorizado'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
     telegram_chat_id = request.query_params.get('telegram_chat_id')
 
     if not telegram_chat_id:
@@ -249,16 +290,25 @@ def verify_user_by_telegram_chat_id(request):
 
     try:
         user = CustomUser.objects.get(telegram_chat_id=telegram_chat_id)
-        serializer = UserSerializer(user)
-        # Generate new temporary token by deleting existing and creating new
-        Token.objects.filter(user=user).delete()
-        token = Token.objects.create(user=user)
-        data = serializer.data
-        data['token'] = token.key
-        return Response(data)
     except CustomUser.DoesNotExist:
         return Response(
             {'error': 'User not found',
              "telegram_chat_id": telegram_chat_id},
             status=status.HTTP_200_OK
         )
+
+    if not user.is_active:
+        return Response(
+            {'error': 'User not found',
+             "telegram_chat_id": telegram_chat_id},
+            status=status.HTTP_200_OK
+        )
+
+    # Se reutiliza el token existente en lugar de borrarlo y crear uno nuevo:
+    # rotarlo en cada llamada invalidaba el token que pudiera estar usando
+    # otra ejecución del workflow en paralelo.
+    token, _ = Token.objects.get_or_create(user=user)
+
+    data = UserSerializer(user).data
+    data['token'] = token.key
+    return Response(data)
