@@ -27,99 +27,118 @@ def get_first_monday(year, month):
         days_to_monday = (7 - first_day.weekday()) % 7
         return first_day + timedelta(days=days_to_monday)
 
-@login_required
-def expense_list(request):
-    """Vista de lista de gastos con filtros y paginación"""
-    # Obtener parámetros de filtro
-    form = ExpenseFilterForm(request.GET)
-    
-    # Filtrar gastos
-    expenses = Expense.objects.all()
-    
-    # Aplicar filtros
-    if form.is_valid():
-        # Filtro por fecha
-        if form.cleaned_data.get('date_from'):
-            expenses = expenses.filter(date__gte=form.cleaned_data['date_from'])
-        if form.cleaned_data.get('date_to'):
-            expenses = expenses.filter(date__lte=form.cleaned_data['date_to'])
-        
-        # Filtro por categoría
-        if form.cleaned_data.get('category'):
-            expenses = expenses.filter(category=form.cleaned_data['category'])
-        
-        # Filtro por método de pago
-        if form.cleaned_data.get('payment_method'):
-            expenses = expenses.filter(payment_method=form.cleaned_data['payment_method'])
-        
-        # Filtro por tipo de pago
-        if form.cleaned_data.get('payment_type'):
-            expenses = expenses.filter(payment_type=form.cleaned_data['payment_type'])
-        
-        # Filtro por usuario
-        if form.cleaned_data.get('user'):
-            expenses = expenses.filter(user=form.cleaned_data['user'])
-        
-        # Filtro por crédito
-        if form.cleaned_data.get('is_credit') is not None:
-            is_credit_value = form.cleaned_data['is_credit']
-            if is_credit_value == 'True':
-                expenses = expenses.filter(is_credit=True)
-            elif is_credit_value == 'False':
-                expenses = expenses.filter(is_credit=False)
-            # Si es string vacío o None, no filtrar
-        
-        # Filtro por monto mínimo
-        if form.cleaned_data.get('min_amount'):
-            expenses = expenses.filter(amount__gte=form.cleaned_data['min_amount'])
-        
-        # Filtro por monto máximo
-        if form.cleaned_data.get('max_amount'):
-            expenses = expenses.filter(amount__lte=form.cleaned_data['max_amount'])
-        
-        # Filtro de búsqueda
-        if form.cleaned_data.get('search'):
-            search_term = form.cleaned_data['search']
-            expenses = expenses.filter(
-                Q(name__icontains=search_term) | 
-                Q(description__icontains=search_term)
-            )
-    
+def filter_expenses(form):
+    """
+    Aplica los filtros del ExpenseFilterForm sobre el queryset de gastos.
+
+    Devuelve (queryset, period_display). La usan tanto el listado como la
+    exportación a Excel, para que exportar dé exactamente lo que se ve
+    en pantalla.
+    """
+    expenses = Expense.objects.select_related(
+        'user', 'category', 'payment_method', 'payment_type'
+    )
+
+    if not form.is_valid():
+        # Formulario inválido: se cae al comportamiento por defecto (mes actual).
+        return _limit_to_current_month(expenses)
+
+    # Filtro por fecha
+    if form.cleaned_data.get('date_from'):
+        expenses = expenses.filter(date__gte=form.cleaned_data['date_from'])
+    if form.cleaned_data.get('date_to'):
+        expenses = expenses.filter(date__lte=form.cleaned_data['date_to'])
+
+    # Filtro por categoría
+    if form.cleaned_data.get('category'):
+        expenses = expenses.filter(category=form.cleaned_data['category'])
+
+    # Filtro por método de pago
+    if form.cleaned_data.get('payment_method'):
+        expenses = expenses.filter(payment_method=form.cleaned_data['payment_method'])
+
+    # Filtro por tipo de pago
+    if form.cleaned_data.get('payment_type'):
+        expenses = expenses.filter(payment_type=form.cleaned_data['payment_type'])
+
+    # Filtro por usuario
+    if form.cleaned_data.get('user'):
+        expenses = expenses.filter(user=form.cleaned_data['user'])
+
+    # Filtro por crédito
+    if form.cleaned_data.get('is_credit') is not None:
+        is_credit_value = form.cleaned_data['is_credit']
+        if is_credit_value == 'True':
+            expenses = expenses.filter(is_credit=True)
+        elif is_credit_value == 'False':
+            expenses = expenses.filter(is_credit=False)
+        # Si es string vacío o None, no filtrar
+
+    # Filtro por monto mínimo
+    if form.cleaned_data.get('min_amount'):
+        expenses = expenses.filter(amount__gte=form.cleaned_data['min_amount'])
+
+    # Filtro por monto máximo
+    if form.cleaned_data.get('max_amount'):
+        expenses = expenses.filter(amount__lte=form.cleaned_data['max_amount'])
+
+    # Filtro de búsqueda
+    if form.cleaned_data.get('search'):
+        search_term = form.cleaned_data['search']
+        expenses = expenses.filter(
+            Q(name__icontains=search_term) |
+            Q(description__icontains=search_term)
+        )
+
     # Ordenamiento
     sort_order = form.cleaned_data.get('sort_order', 'newest')
     if sort_order == 'oldest':
         expenses = expenses.order_by('date', 'id')
     else:  # newest por defecto
         expenses = expenses.order_by('-date', '-id')
-    
+
     # Si no hay filtros aplicados, mostrar solo el mes actual
-    if not any([form.cleaned_data.get('date_from'), form.cleaned_data.get('date_to'), 
+    if not any([form.cleaned_data.get('date_from'), form.cleaned_data.get('date_to'),
                 form.cleaned_data.get('category'), form.cleaned_data.get('payment_method'),
                 form.cleaned_data.get('payment_type'), form.cleaned_data.get('user'),
                 form.cleaned_data.get('is_credit'), form.cleaned_data.get('min_amount'),
                 form.cleaned_data.get('max_amount'), form.cleaned_data.get('search')]):
-        
-        # Filtrar por mes actual
-        today = timezone.now().date()
-        first_day = today.replace(day=1)
-        if today.month == 12:
-            last_day = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
-        else:
-            last_day = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
-        
-        expenses = expenses.filter(date__range=[first_day, last_day])
-        period_display = f"{first_day.strftime('%B %Y')}"
+        return _limit_to_current_month(expenses)
+
+    # Mostrar período de filtros aplicados
+    if form.cleaned_data.get('date_from') and form.cleaned_data.get('date_to'):
+        period_display = f"Desde {form.cleaned_data['date_from'].strftime('%d/%m/%Y')} hasta {form.cleaned_data['date_to'].strftime('%d/%m/%Y')}"
+    elif form.cleaned_data.get('date_from'):
+        period_display = f"Desde {form.cleaned_data['date_from'].strftime('%d/%m/%Y')}"
+    elif form.cleaned_data.get('date_to'):
+        period_display = f"Hasta {form.cleaned_data['date_to'].strftime('%d/%m/%Y')}"
     else:
-        # Mostrar período de filtros aplicados
-        if form.cleaned_data.get('date_from') and form.cleaned_data.get('date_to'):
-            period_display = f"Desde {form.cleaned_data['date_from'].strftime('%d/%m/%Y')} hasta {form.cleaned_data['date_to'].strftime('%d/%m/%Y')}"
-        elif form.cleaned_data.get('date_from'):
-            period_display = f"Desde {form.cleaned_data['date_from'].strftime('%d/%m/%Y')}"
-        elif form.cleaned_data.get('date_to'):
-            period_display = f"Hasta {form.cleaned_data['date_to'].strftime('%d/%m/%Y')}"
-        else:
-            period_display = "Todos los períodos"
-    
+        period_display = "Todos los períodos"
+
+    return expenses, period_display
+
+
+def _limit_to_current_month(expenses):
+    """Restringe el queryset al mes en curso (comportamiento por defecto)."""
+    today = timezone.now().date()
+    first_day = today.replace(day=1)
+    if today.month == 12:
+        last_day = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
+    else:
+        last_day = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
+
+    expenses = expenses.filter(date__range=[first_day, last_day]).order_by('-date', '-id')
+    return expenses, f"{first_day.strftime('%B %Y')}"
+
+
+@login_required
+def expense_list(request):
+    """Vista de lista de gastos con filtros y paginación"""
+    # Obtener parámetros de filtro
+    form = ExpenseFilterForm(request.GET)
+
+    expenses, period_display = filter_expenses(form)
+
     # Calcular total
     total_amount = expenses.aggregate(total=Sum('amount'))['total'] or 0
     
@@ -541,15 +560,11 @@ def export_expenses(request):
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
     
-    # Obtener gastos filtrados
-    expenses = Expense.objects.all()
-    
-    # Aplicar filtros si existen
+    # Se aplican exactamente los mismos filtros que en el listado, para que
+    # el Excel contenga lo que el usuario está viendo en pantalla.
     form = ExpenseFilterForm(request.GET)
-    if form.is_valid():
-        # Aplicar los mismos filtros que en la vista de lista
-        pass
-    
+    expenses, period_display = filter_expenses(form)
+
     # Crear workbook
     wb = Workbook()
     ws = wb.active
@@ -559,15 +574,19 @@ def export_expenses(request):
     header_font = Font(bold=True)
     header_fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
     
+    # Fila 1: período exportado, para que el archivo se explique solo
+    period_cell = ws.cell(row=1, column=1, value=f"Período: {period_display}")
+    period_cell.font = Font(bold=True, italic=True)
+
     # Headers
     headers = ['Fecha', 'Usuario', 'Nombre', 'Monto', 'Categoría', 'Método de Pago', 'Tipo', 'Es Crédito', 'Cuotas', 'Descripción']
     for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col, value=header)
+        cell = ws.cell(row=2, column=col, value=header)
         cell.font = header_font
         cell.fill = header_fill
-    
+
     # Datos
-    for row, expense in enumerate(expenses, 2):
+    for row, expense in enumerate(expenses, 3):
         ws.cell(row=row, column=1, value=expense.date.strftime('%d/%m/%Y'))
         ws.cell(row=row, column=2, value=expense.user.username)
         ws.cell(row=row, column=3, value=expense.name)
