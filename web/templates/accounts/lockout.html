@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Cuenta bloqueada temporalmente{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow border-danger">
+            <div class="card-header bg-danger text-white text-center">
+                <h4 class="mb-0"><i class="fas fa-lock"></i> Acceso bloqueado</h4>
+            </div>
+            <div class="card-body text-center">
+                <p class="lead">
+                    Se superó el número de intentos de inicio de sesión permitidos.
+                </p>
+                <p>
+                    Por seguridad, el acceso quedó bloqueado durante
+                    <strong>30 minutos</strong>. Pasado ese tiempo podés volver a
+                    intentar.
+                </p>
+                <p class="text-muted mb-0">
+                    <small>
+                        Si olvidaste tu contraseña, pedile a un administrador de la
+                        familia que te la restablezca.
+                    </small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

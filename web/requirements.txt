@@ -18,3 +18,8 @@ redis
 django-redis
 requests
 python-dateutil
+
+# Producción / seguridad
+gunicorn==23.0.0
+whitenoise==6.8.2
+django-axes==7.0.0
