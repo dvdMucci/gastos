@@ -198,3 +198,6 @@ mariadb_data/
 #web/web/settings.py
 # Archivos sensibles / de trabajo
 cookies.txt
+
+# Estáticos generados por collectstatic
+web/staticfiles/
