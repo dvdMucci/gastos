@@ -196,3 +196,5 @@ cython_debug/
 #Carpetas del proyecto
 mariadb_data/
 #web/web/settings.py
+# Archivos sensibles / de trabajo
+cookies.txt
