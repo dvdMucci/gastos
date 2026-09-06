@@ -17,11 +17,14 @@ class Command(BaseCommand):
             {'name': 'Verdulería', 'icon': 'fas fa-carrot', 'color': '#27ae60'},
             {'name': 'Supermercado', 'icon': 'fas fa-shopping-cart', 'color': '#3498db'},
             {'name': 'Panadería', 'icon': 'fas fa-bread-slice', 'color': '#f39c12'},
+            {'name': 'Pollería', 'icon': 'fas fa-drumstick-bite', 'color': '#ffb74d'},
+            {'name': 'Heladería', 'icon': 'fas fa-ice-cream', 'color': '#f06292'},
             
             # Hogar
             {'name': 'Ferretería', 'icon': 'fas fa-hammer', 'color': '#8e44ad'},
             {'name': 'Limpieza', 'icon': 'fas fa-broom', 'color': '#1abc9c'},
             {'name': 'Jardín', 'icon': 'fas fa-seedling', 'color': '#2ecc71'},
+            {'name': 'Lavadero', 'icon': 'fas fa-soap', 'color': '#4dd0e1'},
             
             # Salud
             {'name': 'Medicamentos', 'icon': 'fas fa-pills', 'color': '#e74c3c'},
@@ -64,6 +67,9 @@ class Command(BaseCommand):
             {'name': 'Reparaciones Auto', 'icon': 'fas fa-wrench', 'color': '#ff5722'},
             {'name': 'Reparaciones Electrodomésticos', 'icon': 'fas fa-tools', 'color': '#607d8b'},
             
+            # Indumentaria
+            {'name': 'Indumentaria', 'icon': 'fas fa-tshirt', 'color': '#5c6bc0'},
+
             # Otros
             {'name': 'Imprevistos', 'icon': 'fas fa-exclamation-triangle', 'color': '#f44336'},
             {'name': 'Donaciones', 'icon': 'fas fa-heart', 'color': '#e91e63'},
