@@ -117,7 +117,11 @@ class MonthSelectorForm(forms.Form):
         label='Año'
     )
     month = forms.ChoiceField(
-        choices=[(str(i), calendar.month_name[i]) for i in range(1, 13)],
+        choices=[
+            ('1', 'Enero'), ('2', 'Febrero'), ('3', 'Marzo'), ('4', 'Abril'),
+            ('5', 'Mayo'), ('6', 'Junio'), ('7', 'Julio'), ('8', 'Agosto'),
+            ('9', 'Septiembre'), ('10', 'Octubre'), ('11', 'Noviembre'), ('12', 'Diciembre'),
+        ],
         required=False,
         widget=forms.Select(attrs={
             'class': 'form-control',

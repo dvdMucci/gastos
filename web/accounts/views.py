@@ -5,8 +5,16 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.conf import settings
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.views import (
+    PasswordResetView,
+    PasswordResetDoneView,
+    PasswordResetConfirmView,
+    PasswordResetCompleteView,
+)
 from django.contrib import messages
+from django.core.cache import cache
 from django.http import JsonResponse, HttpResponse
+from django.urls import reverse_lazy
 from django.views.decorators.http import require_http_methods, require_POST
 from django.core.paginator import Paginator
 from django.db.models import Sum
@@ -26,6 +34,10 @@ from .models import CustomUser
 from .forms import CustomUserCreationForm, ProfileForm, LoginForm, ChangePasswordForm
 from .serializers import UserSerializer
 from income.models import Income
+
+# Max password-reset emails per IP per hour (enumeration / spam protection)
+PASSWORD_RESET_RATE_LIMIT = 5
+PASSWORD_RESET_RATE_WINDOW = 3600
 
 logger = logging.getLogger(__name__)
 
@@ -312,3 +324,65 @@ def verify_user_by_telegram_chat_id(request):
     data = UserSerializer(user).data
     data['token'] = token.key
     return Response(data)
+
+
+def _client_ip(request):
+    """Best-effort client IP; trusts X-Forwarded-For only behind private proxies."""
+    remote_addr = request.META.get('REMOTE_ADDR', '')
+    try:
+        from ipaddress import ip_address
+        ip_obj = ip_address(remote_addr)
+        is_private = ip_obj.is_private or ip_obj.is_loopback
+    except ValueError:
+        is_private = False
+
+    if is_private or remote_addr in getattr(settings, 'TRUSTED_PROXY_IPS', []):
+        forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+        if forwarded:
+            return forwarded.split(',')[0].strip()
+    return remote_addr or 'unknown'
+
+
+class RateLimitedPasswordResetView(PasswordResetView):
+    """
+    Django password reset with per-IP rate limiting.
+    Always shows the same success page (does not reveal whether the email exists).
+    """
+    template_name = 'accounts/password_reset_form.html'
+    email_template_name = 'accounts/password_reset_email.html'
+    subject_template_name = 'accounts/password_reset_subject.txt'
+    success_url = reverse_lazy('password_reset_done')
+    html_email_template_name = None
+
+    def form_valid(self, form):
+        ip = _client_ip(self.request)
+        cache_key = f'pwd_reset_rate_{ip}'
+        try:
+            count = cache.get(cache_key, 0) or 0
+        except Exception:
+            count = 0
+
+        if count >= PASSWORD_RESET_RATE_LIMIT:
+            # Same UX as success — do not send mail, do not leak rate-limit details
+            logger.warning(f'Password reset rate limit hit for IP {ip}')
+            return redirect(self.get_success_url())
+
+        try:
+            cache.set(cache_key, count + 1, PASSWORD_RESET_RATE_WINDOW)
+        except Exception:
+            pass
+
+        return super().form_valid(form)
+
+
+class AppPasswordResetDoneView(PasswordResetDoneView):
+    template_name = 'accounts/password_reset_done.html'
+
+
+class AppPasswordResetConfirmView(PasswordResetConfirmView):
+    template_name = 'accounts/password_reset_confirm.html'
+    success_url = reverse_lazy('password_reset_complete')
+
+
+class AppPasswordResetCompleteView(PasswordResetCompleteView):
+    template_name = 'accounts/password_reset_complete.html'

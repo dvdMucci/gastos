@@ -19,8 +19,8 @@ def forecast_dashboard(request):
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"Forecast dashboard accessed by user: {request.user}")
-    # Generar estimaciones para los últimos 6 meses y próximos 12 meses
-    MonthlyForecast.generate_forecasts(request.user, months_back=6, months_forward=12)
+    # Regenerar solo si el cache Redis está invalidado o vacío
+    MonthlyForecast.ensure_forecasts(request.user, months_back=6, months_forward=12)
 
     # Obtener estimaciones mensuales
     monthly_forecasts = MonthlyForecast.objects.filter(user=request.user).order_by('month')
@@ -375,8 +375,7 @@ def expense_forecast_list(request):
 @login_required
 def monthly_forecasts(request):
     """Vista detallada de estimaciones mensuales"""
-    # Generar estimaciones si no existen
-    MonthlyForecast.generate_forecasts(request.user, months_back=6, months_forward=12)
+    MonthlyForecast.ensure_forecasts(request.user, months_back=6, months_forward=12)
 
     # Obtener estimaciones mensuales
     monthly_forecasts = MonthlyForecast.objects.filter(user=request.user).order_by('month')

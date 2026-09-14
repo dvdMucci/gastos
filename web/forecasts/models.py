@@ -329,48 +329,70 @@ class MonthlyForecast(models.Model):
         return f"{self.month.strftime('%B %Y')} - ${total:.2f}"
     
     @classmethod
-    def generate_forecasts(cls, user, months_back=6, months_forward=12):
-        """Generar estimaciones para los meses especificados - siempre en tiempo real"""
-        from finances.models import Expense
-        from subscriptions.models import Subscription
-        from .models import ExpenseForecast
+    def _ready_cache_key(cls, user, months_back, months_forward):
+        return f"forecasts_ready_{user.id}_{months_back}_{months_forward}"
 
+    @classmethod
+    def invalidate_forecast_cache(cls, user=None):
+        """
+        Invalidate cached forecast readiness flags.
+        If user is None, invalidates for all active users (household data changed).
+        """
+        from django.contrib.auth import get_user_model
+
+        users = [user] if user is not None else get_user_model().objects.filter(is_active=True)
+        for u in users:
+            for months_back in (3, 6, 12):
+                for months_forward in (6, 12, 24):
+                    try:
+                        cache.delete(cls._ready_cache_key(u, months_back, months_forward))
+                    except Exception:
+                        pass
+
+    @classmethod
+    def ensure_forecasts(cls, user, months_back=6, months_forward=12):
+        """
+        Return existing monthly forecasts when the Redis cache says they are fresh.
+        Regenerates only on cache miss, empty data, or after invalidate_forecast_cache().
+        """
+        cache_key = cls._ready_cache_key(user, months_back, months_forward)
+        try:
+            if cache.get(cache_key) and cls.objects.filter(user=user).exists():
+                return cls.objects.filter(user=user).count()
+        except Exception:
+            pass
+        return cls.generate_forecasts(user, months_back=months_back, months_forward=months_forward)
+
+    @classmethod
+    def generate_forecasts(cls, user, months_back=6, months_forward=12):
+        """Regenerate monthly forecasts and mark the Redis cache as fresh."""
         # Delete all existing MonthlyForecast records para regenerar con datos actuales
         cls.objects.filter(user=user).delete()
 
-        # Create cache key based on user and parameters
-        cache_key = f"forecasts_{user.id}_{months_back}_{months_forward}"
-        # No usar cache - siempre generar datos frescos en tiempo real
+        cache_key = cls._ready_cache_key(user, months_back, months_forward)
 
         today = timezone.now().date()
         current_month = today.replace(day=1)
 
         # Generar estimaciones para meses pasados, actual y futuros
-        # Todos los cálculos se hacen en tiempo real basándose en la fecha actual
         for i in range(-months_back, months_forward + 1):
             if i < 0:
-                # Meses pasados
                 month_date = (current_month + relativedelta(months=i)).replace(day=1)
                 cls._generate_historical_month(user, month_date)
             elif i == 0:
-                # Mes actual - cálculo en tiempo real
                 cls._generate_current_month(user, current_month)
             else:
-                # Meses futuros - cálculo en tiempo real con promedio de últimos 6 meses
                 month_date = (current_month + relativedelta(months=i)).replace(day=1)
                 cls._generate_future_month(user, month_date)
 
-        # No cachear - los datos deben calcularse siempre en tiempo real
-        # Cache the result for 10 minutes
         try:
-            cache.set(cache_key, True, 600)
+            # Fresh until invalidated by data changes (or max 24h safety TTL)
+            cache.set(cache_key, True, 60 * 60 * 24)
         except Exception as e:
-            # Log the error but continue without caching
             import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"Cache set failed for key {cache_key}: {e}")
-        
-        # Return the number of forecasts created
+
         return cls.objects.filter(user=user).count()
     
     @classmethod

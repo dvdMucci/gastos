@@ -92,7 +92,7 @@
             <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> Análisis por Categorías</h5>
         </div>
         <div class="card-body">
-            <form method="get" id="month-selector-form">
+            <form method="get" id="month-selector-form" data-loading="Cargando...">
                 <div class="row">
                     <div class="col-md-3">
                         <label for="year-selector" class="form-label">Año</label>
@@ -103,9 +103,13 @@
                         {{ month_form.month }}
                     </div>
                     <div class="col-md-6 d-flex align-items-end">
-                        <p class="mb-0 text-muted">
+                        <p class="mb-0 text-muted" id="month-selector-hint">
                             <small>Selecciona un año y mes para ver el desglose de gastos por categoría</small>
                         </p>
+                        <div id="month-selector-spinner" class="d-none ms-2">
+                            <span class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></span>
+                            <small class="text-muted ms-1">Cargando...</small>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -357,6 +361,19 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const monthForm = document.getElementById('month-selector-form');
+    if (monthForm) {
+        monthForm.querySelectorAll('select').forEach(function(sel) {
+            sel.addEventListener('change', function() {
+                const hint = document.getElementById('month-selector-hint');
+                const spinner = document.getElementById('month-selector-spinner');
+                if (hint) hint.classList.add('d-none');
+                if (spinner) spinner.classList.remove('d-none');
+                monthForm.querySelectorAll('select').forEach(function(s) { s.disabled = true; });
+            });
+        });
+    }
+
     // Timeout para mostrar error si el gráfico no carga
     const chartTimeout = setTimeout(function() {
         const loadingElement = document.getElementById('chart-loading');

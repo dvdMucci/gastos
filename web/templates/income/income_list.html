@@ -29,7 +29,7 @@
             <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
         </div>
         <div class="card-body">
-            <form method="get" id="filter-form">
+            <form method="get" id="filter-form" data-loading="Filtrando...">
                 <div class="row">
                     <div class="col-md-2">
                         <label class="form-label">Desde</label>
@@ -85,6 +85,17 @@
                     </div>
                 </div>
             </form>
+            {% if active_filters %}
+            <div class="mt-3 pt-3 border-top">
+                <small class="text-muted me-2"><i class="fas fa-filter"></i> Filtros activos:</small>
+                {% for chip in active_filters %}
+                <a href="{{ chip.remove_url }}" class="filter-chip" title="Quitar filtro">
+                    <strong>{{ chip.label }}:</strong> {{ chip.value }}
+                    <span class="chip-x"><i class="fas fa-times"></i></span>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -113,8 +124,8 @@
         </div>
     </div>
 
-    <!-- Vista de Lista (por defecto) -->
-    <div id="list-view">
+    <!-- Vista de Lista (por defecto en desktop) -->
+    <div id="list-view" class="view-list-only-desktop">
         <div class="card">
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -205,8 +216,8 @@
         </div>
     </div>
 
-    <!-- Vista de Tarjetas (oculta por defecto) -->
-    <div id="card-view" style="display: none;">
+    <!-- Vista de Tarjetas (por defecto en móvil) -->
+    <div id="card-view" class="view-cards-mobile-default" style="display: none;">
         <div class="row">
             {% for income in incomes %}
             <div class="col-lg-4 col-md-6 mb-4">
@@ -330,22 +341,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const toggleText = document.getElementById('toggle-text');
     const listView = document.getElementById('list-view');
     const cardView = document.getElementById('card-view');
+    const storageKey = 'incomeListView';
+    const isMobile = () => window.matchMedia('(max-width: 767.98px)').matches;
 
-    // Cambiar entre vista de lista y tarjetas
-    toggleBtn.addEventListener('click', function() {
-        if (listView.style.display !== 'none') {
-            // Cambiar a vista de tarjetas
+    function applyView(mode, persist) {
+        listView.classList.remove('view-list-only-desktop');
+        cardView.classList.remove('view-cards-mobile-default');
+        if (mode === 'cards') {
             listView.style.display = 'none';
             cardView.style.display = 'block';
             toggleIcon.className = 'fas fa-th-large';
             toggleText.textContent = 'Vista Tarjetas';
         } else {
-            // Cambiar a vista de lista
             listView.style.display = 'block';
             cardView.style.display = 'none';
             toggleIcon.className = 'fas fa-list';
             toggleText.textContent = 'Vista Lista';
         }
+        if (persist) {
+            try { localStorage.setItem(storageKey, mode); } catch (e) {}
+        }
+    }
+
+    const saved = (function() {
+        try { return localStorage.getItem(storageKey); } catch (e) { return null; }
+    })();
+    applyView(saved || (isMobile() ? 'cards' : 'list'), false);
+
+    toggleBtn.addEventListener('click', function() {
+        const next = listView.style.display !== 'none' ? 'cards' : 'list';
+        applyView(next, true);
     });
 });
 </script>

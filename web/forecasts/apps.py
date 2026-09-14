@@ -5,3 +5,6 @@ class ForecastsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'forecasts'
     verbose_name = 'Estimaciones Futuras'
+
+    def ready(self):
+        import forecasts.signals  # noqa: F401

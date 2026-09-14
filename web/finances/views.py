@@ -27,13 +27,21 @@ def get_first_monday(year, month):
         days_to_monday = (7 - first_day.weekday()) % 7
         return first_day + timedelta(days=days_to_monday)
 
-def filter_expenses(form):
+EXPENSE_FILTER_KEYS = (
+    'date_from', 'date_to', 'category', 'payment_method', 'payment_type',
+    'user', 'is_credit', 'min_amount', 'max_amount', 'search',
+)
+
+
+def filter_expenses(form, show_all=False):
     """
     Aplica los filtros del ExpenseFilterForm sobre el queryset de gastos.
 
     Devuelve (queryset, period_display). La usan tanto el listado como la
     exportación a Excel, para que exportar dé exactamente lo que se ve
     en pantalla.
+
+    show_all=True (period=all) omite el recorte al mes actual.
     """
     expenses = Expense.objects.select_related(
         'user', 'category', 'payment_method', 'payment_type'
@@ -41,6 +49,8 @@ def filter_expenses(form):
 
     if not form.is_valid():
         # Formulario inválido: se cae al comportamiento por defecto (mes actual).
+        if show_all:
+            return expenses.order_by('-date', '-id'), "Todos los períodos"
         return _limit_to_current_month(expenses)
 
     # Filtro por fecha
@@ -97,12 +107,10 @@ def filter_expenses(form):
     else:  # newest por defecto
         expenses = expenses.order_by('-date', '-id')
 
-    # Si no hay filtros aplicados, mostrar solo el mes actual
-    if not any([form.cleaned_data.get('date_from'), form.cleaned_data.get('date_to'),
-                form.cleaned_data.get('category'), form.cleaned_data.get('payment_method'),
-                form.cleaned_data.get('payment_type'), form.cleaned_data.get('user'),
-                form.cleaned_data.get('is_credit'), form.cleaned_data.get('min_amount'),
-                form.cleaned_data.get('max_amount'), form.cleaned_data.get('search')]):
+    # Si no hay filtros aplicados, mostrar solo el mes actual (salvo period=all)
+    if not any([form.cleaned_data.get(key) for key in EXPENSE_FILTER_KEYS]):
+        if show_all:
+            return expenses, "Todos los períodos"
         return _limit_to_current_month(expenses)
 
     # Mostrar período de filtros aplicados
@@ -134,50 +142,67 @@ def _limit_to_current_month(expenses):
 @login_required
 def expense_list(request):
     """Vista de lista de gastos con filtros y paginación"""
-    # Obtener parámetros de filtro
-    form = ExpenseFilterForm(request.GET)
+    from core.filters import apply_default_month_to_get, build_active_filter_chips
 
-    expenses, period_display = filter_expenses(form)
+    show_all = request.GET.get('period') == 'all'
+    get_data, used_default_month = apply_default_month_to_get(
+        request.GET, EXPENSE_FILTER_KEYS
+    )
+    form = ExpenseFilterForm(get_data)
 
-    # Calcular total
+    expenses, period_display = filter_expenses(form, show_all=show_all)
+
     total_amount = expenses.aggregate(total=Sum('amount'))['total'] or 0
-    
-    # Mostrar usuario filtrado
+
     user_filter_display = None
-    if form.cleaned_data.get('user'):
+    if form.is_valid() and form.cleaned_data.get('user'):
         user_filter_display = form.cleaned_data['user'].username
-    
-    # Paginación
-    paginator = Paginator(expenses, 25)  # 25 gastos por página
+
+    credit_labels = {'True': 'Solo créditos', 'False': 'Solo contado'}
+    active_filters = build_active_filter_chips(
+        request,
+        form,
+        [
+            ('date_from', 'Desde', None),
+            ('date_to', 'Hasta', None),
+            ('category', 'Categoría', lambda v: v.name),
+            ('payment_method', 'Método', lambda v: v.get_name_display()),
+            ('payment_type', 'Tipo', lambda v: v.name),
+            ('user', 'Usuario', lambda v: v.username),
+            ('is_credit', 'Crédito', lambda v: credit_labels.get(v, v)),
+            ('min_amount', 'Mín', lambda v: f'${v}'),
+            ('max_amount', 'Máx', lambda v: f'${v}'),
+            ('search', 'Buscar', None),
+            ('sort_order', 'Orden', lambda v: 'Más antiguos' if v == 'oldest' else 'Más recientes'),
+        ],
+        EXPENSE_FILTER_KEYS,
+        used_default_month=used_default_month,
+    )
+
+    paginator = Paginator(expenses, 25)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
+
     context = {
         'expenses': page_obj,
         'form': form,
         'total_amount': total_amount,
         'period_display': period_display,
         'user_filter_display': user_filter_display,
+        'active_filters': active_filters,
     }
-    
+
     return render(request, 'finances/expense_list.html', context)
 
 @login_required
 def expense_create(request):
     """Crear un nuevo gasto"""
     if request.method == 'POST':
-        print(f"DEBUG: POST data received: {request.POST}")
         form = ExpenseForm(request.POST)
-        print(f"DEBUG: Form is valid: {form.is_valid()}")
-        if not form.is_valid():
-            print(f"DEBUG: Form errors: {form.errors}")
-            print(f"DEBUG: Non-field errors: {form.non_field_errors()}")
-
         if form.is_valid():
-            print(f"DEBUG: Form cleaned data: {form.cleaned_data}")
             expense = form.save(commit=False)
             expense.user = request.user
-            
+
             # Manejar lógica de crédito
             if expense.payment_method.name == 'credito':
                 # Get installments from POST data since we're using a custom input field
@@ -187,7 +212,6 @@ def expense_create(request):
                 except (ValueError, TypeError):
                     installments = 1
 
-                print(f"DEBUG: Processing credit expense - total_amount: {expense.amount}, installments: {installments}")
                 expense.is_credit = True
                 expense.total_credit_amount = expense.amount  # Use the entered amount as total credit amount
                 expense.installments = installments
@@ -207,12 +231,10 @@ def expense_create(request):
 
                 # Guardar Cuota 0/N
                 expense.save()
-                print(f"DEBUG: Saved Cuota 0/{installments} with amount 0 on {expense.date}")
 
                 # Crear cuotas futuras (1/N to N/N)
                 if expense.installments >= 1:
                     amount_per_installment = expense.total_credit_amount / expense.installments
-                    print(f"DEBUG: Creating {expense.installments} installments of {amount_per_installment} each")
 
                     # Start from the next month
                     start_year = expense.date.year
@@ -231,7 +253,6 @@ def expense_create(request):
 
                         # Get first Monday of that month
                         installment_date = get_first_monday(installment_year, installment_month)
-                        print(f"DEBUG: Calculated first Monday for installment {i}: {installment_date} (month: {installment_month}/{installment_year})")
 
                         # Crear cuota
                         installment_expense = Expense.objects.create(
@@ -250,7 +271,6 @@ def expense_create(request):
                             remaining_amount=expense.total_credit_amount - (amount_per_installment * i),
                             credit_group_id=credit_group_id
                         )
-                        print(f"DEBUG: Created installment {i}/{installments} for {installment_date} with amount {amount_per_installment}")
 
                 messages.success(request, f'Gasto a crédito creado exitosamente. Se crearon {expense.installments + 1} cuotas (0/{expense.installments} + {expense.installments} cuotas).')
             else:
@@ -262,11 +282,13 @@ def expense_create(request):
     else:
         form = ExpenseForm()
     
+    credito_pm = PaymentMethod.objects.filter(name='credito').first()
     context = {
         'form': form,
-        'title': 'Nuevo Gasto'
+        'title': 'Nuevo Gasto',
+        'credito_payment_method_id': credito_pm.pk if credito_pm else None,
     }
-    
+
     return render(request, 'finances/expense_form.html', context)
 
 @login_required
@@ -330,7 +352,6 @@ def expense_edit(request, pk):
 
                                 # Get first Monday of that month
                                 installment_date = get_first_monday(installment_year, installment_month)
-                                print(f"DEBUG: Recreated first Monday for installment {i}: {installment_date}")
 
                                 # Crear cuota
                                 installment_expense = Expense.objects.create(
@@ -349,7 +370,6 @@ def expense_edit(request, pk):
                                     remaining_amount=expense.total_credit_amount - (amount_per_installment * i),
                                     credit_group_id=old_credit_group_id
                                 )
-                                print(f"DEBUG: Recreated installment {i}/{expense.installments} for {installment_date}")
                         
                         messages.success(request, f'Gasto a crédito actualizado. Se recrearon {expense.installments + 1} cuotas (0/{expense.installments} + {expense.installments} cuotas).')
                     else:
@@ -374,7 +394,6 @@ def expense_edit(request, pk):
                     # Crear cuotas futuras (1/N to N/N)
                     if expense.installments >= 1:
                         amount_per_installment = expense.total_credit_amount / expense.installments
-                        print(f"DEBUG: Creating {expense.installments} installments of {amount_per_installment} each")
 
                         # Start from the next month
                         start_year = expense.date.year
@@ -393,7 +412,6 @@ def expense_edit(request, pk):
 
                             # Get first Monday of that month
                             installment_date = get_first_monday(installment_year, installment_month)
-                            print(f"DEBUG: Calculated first Monday for installment {i}: {installment_date}")
 
                             # Crear cuota
                             installment_expense = Expense.objects.create(
@@ -412,7 +430,6 @@ def expense_edit(request, pk):
                                 remaining_amount=expense.total_credit_amount - (amount_per_installment * i),
                                 credit_group_id=credit_group_id
                             )
-                            print(f"DEBUG: Created installment {i}/{expense.installments} for {installment_date}")
 
                         messages.success(request, f'Gasto a crédito creado exitosamente. Se crearon {expense.installments + 1} cuotas (0/{expense.installments} + {expense.installments} cuotas).')
             else:
@@ -435,11 +452,13 @@ def expense_edit(request, pk):
     else:
         form = ExpenseForm(instance=expense)
     
+    credito_pm = PaymentMethod.objects.filter(name='credito').first()
     context = {
         'form': form,
-        'expense': expense
+        'expense': expense,
+        'credito_payment_method_id': credito_pm.pk if credito_pm else None,
     }
-    
+
     return render(request, 'finances/expense_form.html', context)
 
 @login_required
@@ -562,8 +581,12 @@ def export_expenses(request):
     
     # Se aplican exactamente los mismos filtros que en el listado, para que
     # el Excel contenga lo que el usuario está viendo en pantalla.
-    form = ExpenseFilterForm(request.GET)
-    expenses, period_display = filter_expenses(form)
+    from core.filters import apply_default_month_to_get
+
+    show_all = request.GET.get('period') == 'all'
+    get_data, _ = apply_default_month_to_get(request.GET, EXPENSE_FILTER_KEYS)
+    form = ExpenseFilterForm(get_data)
+    expenses, period_display = filter_expenses(form, show_all=show_all)
 
     # Crear workbook
     wb = Workbook()

@@ -6,6 +6,26 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('profile/', views.profile_view, name='profile'),
     path('change-password/', views.change_password, name='change_password'),
+    path(
+        'password-reset/',
+        views.RateLimitedPasswordResetView.as_view(),
+        name='password_reset',
+    ),
+    path(
+        'password-reset/done/',
+        views.AppPasswordResetDoneView.as_view(),
+        name='password_reset_done',
+    ),
+    path(
+        'password-reset/<uidb64>/<token>/',
+        views.AppPasswordResetConfirmView.as_view(),
+        name='password_reset_confirm',
+    ),
+    path(
+        'password-reset/complete/',
+        views.AppPasswordResetCompleteView.as_view(),
+        name='password_reset_complete',
+    ),
     path('setup-2fa/', views.setup_2fa, name='setup_2fa'),
     path('disable-2fa/', views.disable_2fa, name='disable_2fa'),
     path('users/', views.user_list, name='user_list'),

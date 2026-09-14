@@ -29,6 +29,18 @@
     .credit-info i {
         color: #e67700;
     }
+    .credit-preview {
+        display: none;
+        background: #fff8f0;
+        border: 1px solid #ffd8a8;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 1rem;
+    }
+    .credit-preview ul {
+        margin-bottom: 0;
+        padding-left: 1.2rem;
+    }
     .form-group {
         margin-bottom: 1rem;
     }
@@ -58,7 +70,7 @@
                     </h3>
                 </div>
                 <div class="card-body">
-                    <form method="post">
+                    <form method="post" data-loading="Guardando...">
                         {% csrf_token %}
                         
                         <div class="row">
@@ -130,10 +142,20 @@
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label for="id_installments" class="form-label">Número de Cuotas *</label>
-                                        <input type="number" name="installments" class="form-control" min="1" max="60" id="id_installments" required>
+                                        <input type="number" name="installments" class="form-control" min="1" max="60" id="id_installments">
                                         {% if form.installments.errors %}
                                             <div class="text-danger">{{ form.installments.errors }}</div>
                                         {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="credit-preview" class="credit-preview" aria-live="polite">
+                                <div class="d-flex align-items-start gap-2">
+                                    <i class="fas fa-calculator mt-1"></i>
+                                    <div>
+                                        <strong id="credit-preview-summary"></strong>
+                                        <ul id="credit-preview-list" class="small text-muted mt-2"></ul>
+                                        <small class="text-muted">Se crea además la Cuota 0 (monto $0) en la fecha del gasto.</small>
                                     </div>
                                 </div>
                             </div>
@@ -174,16 +196,96 @@ document.addEventListener('DOMContentLoaded', function() {
     const installmentsFieldDiv = document.getElementById('installments-field');
     const isCreditField = document.getElementById('id_is_credit');
     const installmentsInput = document.getElementById('id_installments');
+    const amountInput = document.getElementById('id_amount');
+    const dateInput = document.getElementById('id_date');
+    const previewBox = document.getElementById('credit-preview');
+    const previewSummary = document.getElementById('credit-preview-summary');
+    const previewList = document.getElementById('credit-preview-list');
+    const creditoPaymentMethodId = '{{ credito_payment_method_id|default:"" }}';
+    const monthNames = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 
-    // Función para cargar tipos de pago
+    function isCreditMethod(paymentMethod) {
+        if (!paymentMethod) return false;
+        if (creditoPaymentMethodId && String(paymentMethod) === String(creditoPaymentMethodId)) {
+            return true;
+        }
+        const option = paymentMethodSelect.options[paymentMethodSelect.selectedIndex];
+        const text = (option && option.textContent || '').toUpperCase();
+        return text.includes('CREDITO') || text.includes('CRÉDITO');
+    }
+
+    function getFirstMonday(year, month) {
+        // month: 1-12 — same logic as backend get_first_monday
+        const firstDay = new Date(year, month - 1, 1);
+        const weekday = firstDay.getDay(); // 0=Sun ... 1=Mon
+        const mondayIndex = 1;
+        let daysToMonday = (mondayIndex - weekday + 7) % 7;
+        let result = new Date(year, month - 1, 1 + daysToMonday);
+        if (weekday === 1) {
+            // If 1st is Monday, backend uses the next Monday (8th)
+            result = new Date(year, month - 1, 8);
+        }
+        return result;
+    }
+
+    function formatMoney(n) {
+        return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function updateCreditPreview() {
+        if (!isCreditMethod(paymentMethodSelect.value)) {
+            previewBox.style.display = 'none';
+            return;
+        }
+        const amount = parseFloat(String(amountInput.value || '').replace(',', '.'));
+        const installments = parseInt(installmentsInput.value, 10);
+        const baseDate = dateInput.value ? new Date(dateInput.value + 'T00:00:00') : null;
+
+        if (!amount || amount <= 0 || !installments || installments < 1 || !baseDate || isNaN(baseDate.getTime())) {
+            previewBox.style.display = 'none';
+            return;
+        }
+
+        const perInstallment = amount / installments;
+        let startYear = baseDate.getFullYear();
+        let startMonth = baseDate.getMonth() + 2; // next month (1-based after +1)
+        if (startMonth > 12) {
+            startMonth = 1;
+            startYear += 1;
+        }
+
+        const firstDate = getFirstMonday(startYear, startMonth);
+        const firstMonthName = monthNames[firstDate.getMonth()];
+        previewSummary.textContent =
+            installments + ' cuotas de $' + formatMoney(perInstallment) +
+            ' desde ' + firstMonthName + ' (+ Cuota 0 en la fecha del gasto)';
+
+        previewList.innerHTML = '';
+        const maxShow = Math.min(installments, 6);
+        for (let i = 1; i <= maxShow; i++) {
+            let m = startMonth + (i - 1);
+            let y = startYear;
+            while (m > 12) { m -= 12; y += 1; }
+            const d = getFirstMonday(y, m);
+            const li = document.createElement('li');
+            li.textContent = 'Cuota ' + i + '/' + installments + ': $' + formatMoney(perInstallment) +
+                ' — ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+            previewList.appendChild(li);
+        }
+        if (installments > maxShow) {
+            const li = document.createElement('li');
+            li.textContent = '… y ' + (installments - maxShow) + ' cuota(s) más';
+            previewList.appendChild(li);
+        }
+        previewBox.style.display = 'block';
+    }
+
     function loadPaymentTypes(paymentMethod) {
-        console.log('Loading payment types for method:', paymentMethod);
         paymentTypeSelect.innerHTML = '<option value="">Cargando...</option>';
 
         fetch(`/finances/get-payment-types/?payment_method=${paymentMethod}`)
             .then(response => response.json())
             .then(data => {
-                console.log('Received payment types data:', data);
                 paymentTypeSelect.innerHTML = '<option value="">Seleccione un tipo de pago</option>';
 
                 if (data.payment_types && Array.isArray(data.payment_types)) {
@@ -198,56 +300,48 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 }
 
-                // Mostrar el campo de tipo de pago
                 paymentTypeSelect.style.display = 'block';
             })
             .catch(error => {
                 console.error('Error loading payment types:', error);
-                // Fallback: mostrar todas las opciones disponibles
                 paymentTypeSelect.innerHTML = '<option value="">Error al cargar tipos - recargue la página</option>';
                 paymentTypeSelect.style.display = 'block';
             });
     }
 
-    // Función para manejar campos de crédito
     function handleCreditFields(paymentMethod) {
-        console.log('Handling credit fields for payment method:', paymentMethod);
-
-        if (paymentMethod === '4') {  // Primary key for CREDITO payment method
-            console.log('Showing installments field for credit');
+        if (isCreditMethod(paymentMethod)) {
             installmentsFieldDiv.style.display = 'block';
             installmentsInput.required = true;
-            isCreditField.value = 'on';  // Django BooleanField expects 'on' for True
+            if (isCreditField) isCreditField.value = 'on';
+            updateCreditPreview();
         } else {
-            console.log('Hiding installments field for non-credit');
             installmentsFieldDiv.style.display = 'none';
             installmentsInput.required = false;
-            isCreditField.value = '';  // Empty string for False
+            if (isCreditField) isCreditField.value = '';
             installmentsInput.value = '';
+            previewBox.style.display = 'none';
         }
     }
 
-    // Sync visible inputs with hidden form fields on input change
-    document.getElementById('id_installments').addEventListener('input', function() {
-        // No need to sync since we removed the hidden field
-        console.log('Installments changed to:', this.value);
-    });
-
-    // Event listener para cambio de método de pago
     paymentMethodSelect.addEventListener('change', function() {
         const selectedMethod = this.value;
-        console.log('Payment method changed to:', selectedMethod);
-
         if (selectedMethod) {
             loadPaymentTypes(selectedMethod);
             handleCreditFields(selectedMethod);
         } else {
             paymentTypeSelect.style.display = 'none';
             installmentsFieldDiv.style.display = 'none';
+            previewBox.style.display = 'none';
         }
     });
 
-    // Si ya hay un valor seleccionado al cargar la página
+    ['input', 'change'].forEach(function(evt) {
+        installmentsInput.addEventListener(evt, updateCreditPreview);
+        amountInput.addEventListener(evt, updateCreditPreview);
+        dateInput.addEventListener(evt, updateCreditPreview);
+    });
+
     if (paymentMethodSelect.value) {
         loadPaymentTypes(paymentMethodSelect.value);
         handleCreditFields(paymentMethodSelect.value);

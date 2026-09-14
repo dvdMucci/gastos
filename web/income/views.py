@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -13,16 +14,26 @@ from .models import Income, IncomeCategory, IncomeSource
 from .forms import IncomeForm, IncomeFilterForm
 from .serializers import IncomeSerializer, IncomeCategorySerializer, IncomeSourceSerializer
 from accounts.models import CustomUser
+from core.filters import apply_default_month_to_get, build_active_filter_chips
 
 logger = logging.getLogger(__name__)
+
+INCOME_FILTER_KEYS = (
+    'date_from', 'date_to', 'category', 'source', 'user',
+    'is_recurring', 'min_amount', 'max_amount', 'search',
+)
 
 
 @login_required
 def income_list(request):
     """List view for income entries with filters and pagination"""
-    form = IncomeFilterForm(request.GET)
+    show_all = request.GET.get('period') == 'all'
+    get_data, used_default_month = apply_default_month_to_get(
+        request.GET, INCOME_FILTER_KEYS
+    )
+    form = IncomeFilterForm(get_data)
 
-    incomes = Income.objects.all()
+    incomes = Income.objects.select_related('user', 'category', 'source')
 
     # Apply filters
     if form.is_valid():
@@ -57,45 +68,75 @@ def income_list(request):
             search_term = form.cleaned_data['search']
             incomes = incomes.filter(description__icontains=search_term)
 
-    # Ordering
-    sort_order = form.cleaned_data.get('sort_order', 'newest')
-    if sort_order == 'oldest':
-        incomes = incomes.order_by('date', 'id')
+        # Ordering
+        sort_order = form.cleaned_data.get('sort_order', 'newest')
+        if sort_order == 'oldest':
+            incomes = incomes.order_by('date', 'id')
+        else:
+            incomes = incomes.order_by('-date', '-id')
+
+        # Default to current month if no filters (unless period=all)
+        if not any(form.cleaned_data.get(key) for key in INCOME_FILTER_KEYS):
+            if show_all:
+                period_display = "Todos los períodos"
+            else:
+                today = timezone.now().date()
+                first_day = today.replace(day=1)
+                if today.month == 12:
+                    last_day = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
+                else:
+                    last_day = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
+
+                incomes = incomes.filter(date__range=[first_day, last_day])
+                period_display = f"{first_day.strftime('%B %Y')}"
+        else:
+            if form.cleaned_data.get('date_from') and form.cleaned_data.get('date_to'):
+                period_display = (
+                    f"Desde {form.cleaned_data['date_from'].strftime('%d/%m/%Y')} "
+                    f"hasta {form.cleaned_data['date_to'].strftime('%d/%m/%Y')}"
+                )
+            elif form.cleaned_data.get('date_from'):
+                period_display = f"Desde {form.cleaned_data['date_from'].strftime('%d/%m/%Y')}"
+            elif form.cleaned_data.get('date_to'):
+                period_display = f"Hasta {form.cleaned_data['date_to'].strftime('%d/%m/%Y')}"
+            else:
+                period_display = "Todos los períodos"
     else:
-        incomes = incomes.order_by('-date', '-id')
-
-    # Default to current month if no filters
-    if not any([form.cleaned_data.get('date_from'), form.cleaned_data.get('date_to'),
-                form.cleaned_data.get('category'), form.cleaned_data.get('source'),
-                form.cleaned_data.get('user'),
-                form.cleaned_data.get('is_recurring'), form.cleaned_data.get('min_amount'),
-                form.cleaned_data.get('max_amount'), form.cleaned_data.get('search')]):
-
         today = timezone.now().date()
         first_day = today.replace(day=1)
         if today.month == 12:
-            last_day = today.replace(year=today.year + 1, month=1, day=1) - timezone.timedelta(days=1)
+            last_day = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
         else:
-            last_day = today.replace(month=today.month + 1, day=1) - timezone.timedelta(days=1)
-
-        incomes = incomes.filter(date__range=[first_day, last_day])
+            last_day = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
+        incomes = incomes.filter(date__range=[first_day, last_day]).order_by('-date', '-id')
         period_display = f"{first_day.strftime('%B %Y')}"
-    else:
-        if form.cleaned_data.get('date_from') and form.cleaned_data.get('date_to'):
-            period_display = f"From {form.cleaned_data['date_from'].strftime('%d/%m/%Y')} to {form.cleaned_data['date_to'].strftime('%d/%m/%Y')}"
-        elif form.cleaned_data.get('date_from'):
-            period_display = f"From {form.cleaned_data['date_from'].strftime('%d/%m/%Y')}"
-        elif form.cleaned_data.get('date_to'):
-            period_display = f"To {form.cleaned_data['date_to'].strftime('%d/%m/%Y')}"
-        else:
-            period_display = "All periods"
 
     total_amount = incomes.aggregate(total=Sum('amount'))['total'] or 0
     total_dollars = incomes.aggregate(total=Sum('en_dolares'))['total'] or 0
 
     user_filter_display = None
-    if form.cleaned_data.get('user'):
+    if form.is_valid() and form.cleaned_data.get('user'):
         user_filter_display = form.cleaned_data['user'].username
+
+    recurring_labels = {'True': 'Solo recurrentes', 'False': 'Solo únicos'}
+    active_filters = build_active_filter_chips(
+        request,
+        form,
+        [
+            ('date_from', 'Desde', None),
+            ('date_to', 'Hasta', None),
+            ('category', 'Categoría', lambda v: v.name),
+            ('source', 'Fuente', lambda v: v.name),
+            ('user', 'Usuario', lambda v: v.username),
+            ('is_recurring', 'Recurrente', lambda v: recurring_labels.get(v, v)),
+            ('min_amount', 'Mín', lambda v: f'${v}'),
+            ('max_amount', 'Máx', lambda v: f'${v}'),
+            ('search', 'Buscar', None),
+            ('sort_order', 'Orden', lambda v: 'Más antiguos' if v == 'oldest' else 'Más recientes'),
+        ],
+        INCOME_FILTER_KEYS,
+        used_default_month=used_default_month,
+    )
 
     paginator = Paginator(incomes, 25)
     page_number = request.GET.get('page')
@@ -108,6 +149,7 @@ def income_list(request):
         'total_dollars': total_dollars,
         'period_display': period_display,
         'user_filter_display': user_filter_display,
+        'active_filters': active_filters,
     }
 
     return render(request, 'income/income_list.html', context)
@@ -122,14 +164,14 @@ def income_create(request):
             income = form.save(commit=False)
             income.user = request.user
             income.save()
-            messages.success(request, 'Income entry created successfully.')
+            messages.success(request, 'Ingreso creado correctamente.')
             return redirect('income:income_list')
     else:
         form = IncomeForm()
 
     context = {
         'form': form,
-        'title': 'New Income'
+        'title': 'Nuevo Ingreso'
     }
 
     return render(request, 'income/income_form.html', context)
@@ -144,7 +186,7 @@ def income_edit(request, pk):
         form = IncomeForm(request.POST, instance=income)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Income entry updated successfully.')
+            messages.success(request, 'Ingreso actualizado correctamente.')
             return redirect('income:income_list')
     else:
         form = IncomeForm(instance=income)
@@ -152,7 +194,7 @@ def income_edit(request, pk):
     context = {
         'form': form,
         'income': income,
-        'title': 'Edit Income'
+        'title': 'Editar Ingreso'
     }
 
     return render(request, 'income/income_form.html', context)
@@ -165,14 +207,13 @@ def income_delete(request, pk):
 
     if request.method == 'POST':
         income.delete()
-        messages.success(request, 'Income entry deleted successfully.')
+        messages.success(request, 'Ingreso eliminado correctamente.')
         return redirect('income:income_list')
 
     context = {
         'income': income
     }
 
-    logger.info(f"Attempting to render template: income/income_delete.html for income delete view")
     return render(request, 'income/income_delete.html', context)
 
 
@@ -210,7 +251,7 @@ class IncomeViewSet(viewsets.ModelViewSet):
     ordering = ['-date']
 
     def get_queryset(self):
-        queryset = Income.objects.all()
+        queryset = Income.objects.select_related('user', 'category', 'source')
         user_id = self.request.query_params.get('user_id')
         if user_id:
             queryset = queryset.filter(user_id=user_id)
@@ -247,4 +288,3 @@ class IncomeSourceViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = IncomeSource.objects.all()
     serializer_class = IncomeSourceSerializer
     permission_classes = [permissions.IsAuthenticated]
-
