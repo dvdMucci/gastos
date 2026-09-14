@@ -121,12 +121,15 @@ def forecast_dashboard(request):
     total_credits = sum((f.future_real_credits or 0) + (f.future_estimated_credits or 0) for f in future_forecasts)
     total_estimates = sum(f.future_estimated_other for f in future_forecasts if f.future_estimated_other)
     
-    # Preparar datos para el gráfico según la nueva lógica
+    # Preparar datos para el gráfico:
+    # - Barras: real (verde) + estimado dinámico (amarillo), apiladas
+    # - Línea máximos reales = tope del tramo verde (= real)
+    # - Línea máximos estimados = tope de la barra apilada (= real + estimado)
     chart_labels = []
-    real_data = []  # Gastos reales (contado + crédito + suscripciones)
-    estimated_data = []  # Gastos estimados dinámicos
-    real_totals_data = []  # Total real
-    estimated_totals_data = []  # Total estimado (real + estimado)
+    real_data = []
+    estimated_data = []
+    real_totals_data = []
+    estimated_totals_data = []
 
     current_month = timezone.now().date().replace(day=1)
     for forecast in monthly_forecasts:
@@ -134,35 +137,31 @@ def forecast_dashboard(request):
         chart_labels.append(month_name)
 
         if forecast.month < current_month:
-            # MESES ANTERIORES: Solo gastos reales (contado + crédito + suscripciones)
-            real = float((forecast.actual_subscriptions or 0) + (forecast.actual_credits or 0) + (forecast.actual_other_expenses or 0))
-            estimated = 0  # No hay estimados en meses pasados
-            real_data.append(real)
-            estimated_data.append(estimated)
-            real_totals_data.append(real)
-            estimated_totals_data.append(real)
+            # MESES ANTERIORES: solo gastos reales del hogar
+            real = float(
+                (forecast.actual_subscriptions or 0)
+                + (forecast.actual_credits or 0)
+                + (forecast.actual_other_expenses or 0)
+            )
+            estimated = 0.0
         elif forecast.month == current_month:
-            # MES ACTUAL: Gastos reales hasta hoy + solo la diferencia estimada
+            # MES ACTUAL: reales hasta hoy + diferencia estimada restante
             real = float(forecast.current_month_actual or 0)
             estimated_total = float(forecast.current_month_estimated or 0)
-            # Solo mostrar la diferencia entre estimado y real
-            estimated = max(0, estimated_total - real)
-            real_data.append(real)
-            estimated_data.append(estimated)
-            real_totals_data.append(real)
-            estimated_totals_data.append(real + estimated)
+            estimated = max(0.0, estimated_total - real)
         else:
-            # MESES FUTUROS: Gastos reales (suscripciones + gastos reales) + estimado dinámico
-            real = float(forecast.future_real_total or 0)  # Suscripciones + gastos reales del mes
-            estimated = float(forecast.future_estimated_other or 0)  # Estimado dinámico (diferencia para llegar al promedio)
-            # El total estimado ya está calculado correctamente en el modelo (promedio de últimos 6 meses)
-            total_estimated = float(forecast.future_estimated_total or 0)  # Total estimado = promedio de últimos 6 meses
-            real_data.append(real)
-            estimated_data.append(estimated)
-            real_totals_data.append(real)
-            estimated_totals_data.append(total_estimated)  # Línea de máximos = promedio de últimos 6 meses
+            # MESES FUTUROS: programado (suscripciones/cuotas/otros) + estimado dinámico
+            real = float(forecast.future_real_total or 0)
+            estimated = float(forecast.future_estimated_other or 0)
 
-    # Ingresos: últimos 6 meses reales, mes actual y 12 futuros = promedio de esos 6 meses
+        # Las líneas siempre se derivan de las mismas series que las barras
+        real_data.append(real)
+        estimated_data.append(estimated)
+        real_totals_data.append(real)
+        estimated_totals_data.append(real + estimated)
+
+    # Ingresos del hogar: por mes calendario (no por índice).
+    # Últimos 6 meses completos = reales; mes actual y futuros = promedio de esos 6.
     income_line_data = [0] * len(chart_labels)
     income_current_month_value = 0.0
     income_avg_6m = 0.0
@@ -170,49 +169,44 @@ def forecast_dashboard(request):
     try:
         from income.models import Income
         start_6m, end_6m = MonthlyForecast._get_last_6_complete_months_range()
-        income_by_month_6 = []
+        income_by_month = {}
         for i in range(6):
             month_start = (end_6m - relativedelta(months=5 - i)).replace(day=1)
             if month_start.month == 12:
                 month_end = month_start.replace(year=month_start.year + 1, month=1) - timedelta(days=1)
             else:
                 month_end = month_start.replace(month=month_start.month + 1) - timedelta(days=1)
+            # Hogar compartido: sumar ingresos de todos los usuarios
             total = Income.objects.filter(
-                user=request.user,
                 date__range=[month_start, month_end]
             ).aggregate(total=Sum('amount'))['total'] or 0
-            income_by_month_6.append(float(total))
-        income_avg_6m = sum(income_by_month_6) / 6 if income_by_month_6 else 0.0
+            income_by_month[(month_start.year, month_start.month)] = float(total)
+
+        income_values_6 = list(income_by_month.values())
+        income_avg_6m = sum(income_values_6) / 6 if income_values_6 else 0.0
 
         income_line_data = []
         income_current_month_value = 0.0
         current_month_index = None
         today = timezone.now().date()
         for idx, forecast in enumerate(monthly_forecasts):
+            month_key = (forecast.month.year, forecast.month.month)
             if forecast.month < current_month:
-                if idx < 6:
-                    income_line_data.append(income_by_month_6[idx])
-                else:
-                    income_line_data.append(0)
+                income_line_data.append(income_by_month.get(month_key, 0.0))
             elif forecast.month == current_month:
                 current_month_index = idx
                 income_line_data.append(income_avg_6m)
-                month_start = current_month
-                if current_month.month == 12:
-                    month_end = current_month.replace(year=current_month.year + 1, month=1) - timedelta(days=1)
-                else:
-                    month_end = current_month.replace(month=current_month.month + 1) - timedelta(days=1)
-                income_current_month_value = Income.objects.filter(
-                    user=request.user,
-                    date__range=[month_start, today]
-                ).aggregate(total=Sum('amount'))['total'] or 0
-                income_current_month_value = float(income_current_month_value)
+                income_current_month_value = float(
+                    Income.objects.filter(
+                        date__range=[current_month, today]
+                    ).aggregate(total=Sum('amount'))['total'] or 0
+                )
             else:
                 income_line_data.append(income_avg_6m)
 
-        while len(income_line_data) < len(chart_labels):
-            income_line_data.append(income_avg_6m if len(income_line_data) > 6 else 0)
         income_line_data = income_line_data[:len(chart_labels)]
+        while len(income_line_data) < len(chart_labels):
+            income_line_data.append(0.0)
     except Exception as e:
         logger.warning(f"Error calculando datos de ingresos para el gráfico: {e}")
         income_line_data = [0] * len(chart_labels)

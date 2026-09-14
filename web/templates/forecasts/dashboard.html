@@ -192,8 +192,8 @@
                     <li><strong>Meses anteriores:</strong> Solo gastos reales (contado + crédito + suscripciones)</li>
                     <li><strong>Mes actual:</strong> Gastos reales hasta hoy + solo la diferencia estimada restante</li>
                     <li><strong>Meses futuros:</strong> Gastos reales (suscripciones + cuotas) + estimado dinámico basado en el promedio de los últimos 6 meses</li>
-                    <li><strong>Líneas de tendencia:</strong> Conectan los máximos reales y estimados para mostrar la evolución</li>
-                    <li><strong>Ingresos:</strong> Últimos 6 meses con valores reales; mes actual y 12 futuros con el promedio de esos 6 meses. En el mes actual, el punto y la raya indican el ingreso acumulado hasta hoy.</li>
+                    <li><strong>Líneas de tendencia:</strong> pasan por el tope de la barra verde (máximos reales) y por el tope apilado real+estimado (máximos estimados)</li>
+                    <li><strong>Ingresos:</strong> últimos 6 meses del hogar con valores reales; mes actual y 12 futuros con el promedio de esos 6 meses. En el mes actual, el punto indica el ingreso acumulado hasta hoy.</li>
                 </ul>
             </div>
             <div id="chart-loading" class="text-center py-4">
@@ -418,13 +418,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 backgroundColor: 'rgba(40, 167, 69, 0.1)',
                 borderWidth: 3,
                 fill: false,
-                tension: 0.4,
+                tension: 0,
                 pointRadius: 4,
                 pointHoverRadius: 6,
                 pointBackgroundColor: 'rgba(40, 167, 69, 1)',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
-                yAxisID: 'y'
+                // Eje no apilado: si usan 'y' con stacked, Chart.js suma la línea encima de las barras
+                yAxisID: 'yLines'
             },
             {
                 label: 'Línea Máximos Estimados',
@@ -434,13 +435,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 backgroundColor: 'rgba(255, 193, 7, 0.1)',
                 borderWidth: 3,
                 fill: false,
-                tension: 0.4,
+                tension: 0,
                 pointRadius: 4,
                 pointHoverRadius: 6,
                 pointBackgroundColor: 'rgba(255, 193, 7, 1)',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
-                yAxisID: 'y'
+                yAxisID: 'yLines'
             },
             {
                 label: 'Ingresos (6m real + promedio)',
@@ -450,13 +451,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 backgroundColor: 'rgba(23, 162, 184, 0.1)',
                 borderWidth: 3,
                 fill: false,
-                tension: 0.4,
+                tension: 0,
                 pointRadius: 4,
                 pointHoverRadius: 6,
                 pointBackgroundColor: 'rgba(23, 162, 184, 1)',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
-                yAxisID: 'y'
+                yAxisID: 'yLines'
             },
             {
                 label: 'Ingreso mes actual',
@@ -473,7 +474,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
                 spanGaps: true,
-                yAxisID: 'y'
+                yAxisID: 'yLines'
             }
         ]
     };
@@ -579,6 +580,15 @@ document.addEventListener('DOMContentLoaded', function() {
                                 return '$' + value.toLocaleString();
                             }
                         }
+                    },
+                    // Mismo rango que y, pero SIN stack: las líneas usan valores absolutos
+                    yLines: {
+                        stacked: false,
+                        min: 0,
+                        max: yAxisMax,
+                        beginAtZero: true,
+                        display: false,
+                        grid: { drawOnChartArea: false }
                     }
                 },
                 plugins: {
@@ -636,7 +646,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                         xScaleID: 'x',
                                         yMin: yLo,
                                         yMax: yHi,
-                                        yScaleID: 'y',
+                                        yScaleID: 'yLines',
                                         borderColor: 'rgba(23, 162, 184, 0.8)',
                                         borderWidth: 2,
                                         borderDash: [5, 5]

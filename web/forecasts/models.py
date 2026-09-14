@@ -330,7 +330,8 @@ class MonthlyForecast(models.Model):
     
     @classmethod
     def _ready_cache_key(cls, user, months_back, months_forward):
-        return f"forecasts_ready_{user.id}_{months_back}_{months_forward}"
+        # v2: suscripciones futuras e ingresos del gráfico usan agregación del hogar
+        return f"forecasts_ready_v2_{user.id}_{months_back}_{months_forward}"
 
     @classmethod
     def invalidate_forecast_cache(cls, user=None):
@@ -912,8 +913,8 @@ class MonthlyForecast(models.Model):
         from .models import ExpenseForecast
 
         # 1. GASTOS REALES PROGRAMADOS PARA ESE MES FUTURO:
-        # a) Suscripciones activas (gastos reales recurrentes)
-        subscriptions = Subscription.objects.filter(user=user, status='active')
+        # a) Suscripciones activas del hogar (ambos usuarios; coherente con gastos agregados)
+        subscriptions = Subscription.objects.filter(status='active')
         real_subscriptions = sum(sub.get_monthly_amount() for sub in subscriptions)
 
         # b) Cuotas de créditos programadas para ese mes (gastos reales con fecha específica)
