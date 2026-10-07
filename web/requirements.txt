@@ -12,8 +12,6 @@ djangorestframework
 django-filter
 openpyxl
 python-telegram-bot
-whisper
-torch
 redis
 django-redis
 requests
