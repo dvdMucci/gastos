@@ -122,43 +122,76 @@ def forecast_dashboard(request):
     total_estimates = sum(f.future_estimated_other for f in future_forecasts if f.future_estimated_other)
     
     # Preparar datos para el gráfico:
-    # - Barras: real (verde) + estimado dinámico (amarillo), apiladas
-    # - Línea máximos reales = tope del tramo verde (= real)
-    # - Línea máximos estimados = tope de la barra apilada (= real + estimado)
+    # Barra verde apilada en 3 segmentos (hogar):
+    #   1) Gastos del mes (contado/débito/transfer, sin crédito ni suscripción)
+    #   2) Cuotas/créditos con vencimiento en ese mes
+    #   3) Suscripciones
+    # Amarillo: estimado dinámico = max(0, promedio - total_verde)
     chart_labels = []
-    real_data = []
+    chart_months = []  # clave YYYY-MM de cada barra, para el detalle diario
+    real_other_data = []
+    real_credits_data = []
+    real_subs_data = []
     estimated_data = []
     real_totals_data = []
     estimated_totals_data = []
 
     current_month = timezone.now().date().replace(day=1)
+    today = timezone.now().date()
+    from finances.models import Expense
+    try:
+        avg_target_6m = float(
+            MonthlyForecast._calculate_average_total_last_6_months(request.user, current_month)
+        )
+    except Exception as e:
+        logger.warning(f"Error calculando promedio 6m para el gráfico: {e}")
+        avg_target_6m = 0.0
+
+    def _month_end(month_start):
+        if month_start.month == 12:
+            return month_start.replace(year=month_start.year + 1, month=1) - timedelta(days=1)
+        return month_start.replace(month=month_start.month + 1) - timedelta(days=1)
+
+    def _split_real_for_range(start_date, end_date):
+        """Partir gastos del hogar en otros / créditos / suscripciones (buckets exclusivos)."""
+        qs = Expense.objects.filter(date__range=[start_date, end_date])
+        other = float(
+            qs.filter(is_credit=False, subscription__isnull=True)
+            .aggregate(total=Sum('amount'))['total'] or 0
+        )
+        credits = float(
+            qs.filter(is_credit=True).aggregate(total=Sum('amount'))['total'] or 0
+        )
+        subs = float(
+            qs.filter(is_credit=False, subscription__isnull=False)
+            .aggregate(total=Sum('amount'))['total'] or 0
+        )
+        return other, credits, subs
+
     for forecast in monthly_forecasts:
         month_name = forecast.month.strftime('%b %Y')
         chart_labels.append(month_name)
+        chart_months.append(forecast.month.strftime('%Y-%m'))
+        month_start = forecast.month
+        end = _month_end(month_start)
 
         if forecast.month < current_month:
-            # MESES ANTERIORES: solo gastos reales del hogar
-            real = float(
-                (forecast.actual_subscriptions or 0)
-                + (forecast.actual_credits or 0)
-                + (forecast.actual_other_expenses or 0)
-            )
+            other, credits, subs = _split_real_for_range(month_start, end)
             estimated = 0.0
         elif forecast.month == current_month:
-            # MES ACTUAL: reales hasta hoy + diferencia estimada restante
-            real = float(forecast.current_month_actual or 0)
-            estimated_total = float(forecast.current_month_estimated or 0)
-            estimated = max(0.0, estimated_total - real)
+            other, credits, subs = _split_real_for_range(month_start, today)
+            estimated = max(0.0, avg_target_6m - (other + credits + subs))
         else:
-            # MESES FUTUROS: programado (suscripciones/cuotas/otros) + estimado dinámico
-            real = float(forecast.future_real_total or 0)
-            estimated = float(forecast.future_estimated_other or 0)
+            other, credits, subs = _split_real_for_range(month_start, end)
+            estimated = max(0.0, avg_target_6m - (other + credits + subs))
 
-        # Las líneas siempre se derivan de las mismas series que las barras
-        real_data.append(real)
+        real_total = other + credits + subs
+        real_other_data.append(other)
+        real_credits_data.append(credits)
+        real_subs_data.append(subs)
         estimated_data.append(estimated)
-        real_totals_data.append(real)
-        estimated_totals_data.append(real + estimated)
+        real_totals_data.append(real_total)
+        estimated_totals_data.append(real_total + estimated)
 
     # Ingresos del hogar: por mes calendario (no por índice).
     # Últimos 6 meses completos = reales; mes actual y futuros = promedio de esos 6.
@@ -219,7 +252,9 @@ def forecast_dashboard(request):
     selected_month_num = str(selected_month.month) if selected_month else None
 
     logger.info(f"Chart data - Labels: {chart_labels}")
-    logger.info(f"Chart data - Real data: {real_data}")
+    logger.info(f"Chart data - Other: {real_other_data}")
+    logger.info(f"Chart data - Credits: {real_credits_data}")
+    logger.info(f"Chart data - Subs: {real_subs_data}")
     logger.info(f"Chart data - Estimated data: {estimated_data}")
     logger.info(f"Chart data - Real totals: {real_totals_data}")
     logger.info(f"Chart data - Estimated totals: {estimated_totals_data}")
@@ -233,7 +268,10 @@ def forecast_dashboard(request):
         'total_credits': total_credits,
         'total_estimates': total_estimates,
         'chart_labels': json.dumps(chart_labels),
-        'real_data': json.dumps(real_data),
+        'chart_months': json.dumps(chart_months),
+        'real_other_data': json.dumps(real_other_data),
+        'real_credits_data': json.dumps(real_credits_data),
+        'real_subs_data': json.dumps(real_subs_data),
         'estimated_data': json.dumps(estimated_data),
         'real_totals_data': json.dumps(real_totals_data),
         'estimated_totals_data': json.dumps(estimated_totals_data),
@@ -466,3 +504,70 @@ def activate_suggestion(request, pk):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Método no permitido'})
+
+
+@login_required
+def daily_expenses(request):
+    """
+    Devuelve los gastos de un mes, día por día, para el detalle del gráfico
+    de estimaciones (al hacer click en una barra mensual).
+
+    Parámetros GET: year, month. Cada gasto se devuelve individualmente para
+    que el gráfico pueda pintar un color por gasto dentro de la barra del día.
+    """
+    try:
+        year = int(request.GET.get('year', ''))
+        month = int(request.GET.get('month', ''))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'year y month son obligatorios y numéricos'}, status=400)
+
+    if not (1 <= month <= 12) or not (2000 <= year <= 2100):
+        return JsonResponse({'error': 'year o month fuera de rango'}, status=400)
+
+    month_start = datetime(year, month, 1).date()
+    days_in_month = calendar.monthrange(year, month)[1]
+    month_end = month_start.replace(day=days_in_month)
+
+    # Pozo común: se muestran los gastos de toda la familia, igual que el
+    # gráfico mensual del que viene el click.
+    # Se excluyen los registros en $0 (las "Cuota 0/N", que son la cabecera de
+    # una compra a crédito y no un gasto del día): no suman al total y sólo
+    # ensuciarían el gráfico con segmentos invisibles.
+    qs = (
+        Expense.objects
+        .filter(date__range=[month_start, month_end])
+        .exclude(amount=0)
+        .select_related('category', 'user')
+        .order_by('date', '-amount', 'id')
+    )
+
+    expenses = []
+    for e in qs:
+        if e.is_credit:
+            tipo = 'cuota'
+        elif e.subscription_id:
+            tipo = 'suscripcion'
+        else:
+            tipo = 'otro'
+        expenses.append({
+            'id': e.id,
+            'day': e.date.day,
+            'name': e.name,
+            'amount': float(e.amount),
+            'category': e.category.name if e.category else 'Sin categoría',
+            'user': e.user.username if e.user else '',
+            'tipo': tipo,
+        })
+
+    meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+             'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+    return JsonResponse({
+        'year': year,
+        'month': month,
+        'month_label': f'{meses[month - 1].capitalize()} {year}',
+        'days_in_month': days_in_month,
+        'expenses': expenses,
+        'total': sum(x['amount'] for x in expenses),
+        'count': len(expenses),
+    })

@@ -14,6 +14,9 @@ urlpatterns = [
     path('expense-forecast/<int:pk>/edit/', views.expense_forecast_edit, name='expense_forecast_edit'),
     path('expense-forecast/<int:pk>/delete/', views.expense_forecast_delete, name='expense_forecast_delete'),
 
+    # Datos para el detalle diario del gráfico (JSON)
+    path('daily/', views.daily_expenses, name='daily_expenses'),
+
     # Vistas especiales
     path('monthly/', views.monthly_forecasts, name='monthly_forecasts'),
     path('generate/', views.generate_forecasts, name='generate_forecasts'),

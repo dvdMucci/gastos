@@ -9,6 +9,9 @@
         max-height: 400px !important;
         height: 400px !important;
     }
+    #dailyChart {
+        max-height: 420px;
+    }
     .chart-container {
         height: 400px;
         position: relative;
@@ -36,7 +39,7 @@
     </div>
 
     <!-- Filtros del gráfico -->
-    <div class="card mb-4">
+    <div class="card mb-4" id="chart-filters-card">
         <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros del Gráfico</h5>
         </div>
@@ -46,7 +49,7 @@
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="show-real" checked>
                         <label class="form-check-label" for="show-real">
-                            <i class="fas fa-money-bill-wave"></i> Gastos Reales
+                            <i class="fas fa-money-bill-wave"></i> Gastos reales (mes + cuotas + suscripciones)
                         </label>
                     </div>
                 </div>
@@ -182,18 +185,28 @@
 
     <!-- Gráfico principal -->
     <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Proyección de Gastos (6 meses atrás + 12 meses adelante)</h5>
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0" id="chart-card-title">
+                <i class="fas fa-chart-bar"></i> Proyección de Gastos (6 meses atrás + 12 meses adelante)
+            </h5>
+            <div class="d-flex align-items-center gap-2">
+                <small class="text-muted d-none d-md-inline" id="chart-drill-hint">
+                    <i class="fas fa-hand-pointer"></i> Click en una barra para ver el detalle por día
+                </small>
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="chart-back-btn">
+                    <i class="fas fa-arrow-left"></i> Volver a vista mensual
+                </button>
+            </div>
         </div>
         <div class="card-body">
             <div class="alert alert-info mb-3">
                 <h6><i class="fas fa-info-circle"></i> Cómo interpretar el gráfico:</h6>
                 <ul class="mb-0">
-                    <li><strong>Meses anteriores:</strong> Solo gastos reales (contado + crédito + suscripciones)</li>
-                    <li><strong>Mes actual:</strong> Gastos reales hasta hoy + solo la diferencia estimada restante</li>
-                    <li><strong>Meses futuros:</strong> Gastos reales (suscripciones + cuotas) + estimado dinámico basado en el promedio de los últimos 6 meses</li>
-                    <li><strong>Líneas de tendencia:</strong> pasan por el tope de la barra verde (máximos reales) y por el tope apilado real+estimado (máximos estimados)</li>
-                    <li><strong>Ingresos:</strong> últimos 6 meses del hogar con valores reales; mes actual y 12 futuros con el promedio de esos 6 meses. En el mes actual, el punto indica el ingreso acumulado hasta hoy.</li>
+                    <li><strong>Barra verde (apilada):</strong> gastos del mes + cuotas/créditos con vencimiento ese mes + suscripciones</li>
+                    <li><strong>Meses anteriores:</strong> solo esos gastos reales (sin estimado)</li>
+                    <li><strong>Mes actual / futuros:</strong> reales programados/cargados + estimado dinámico (resto hasta el promedio de 6 meses)</li>
+                    <li><strong>Líneas:</strong> máximos reales = tope verde; máximos estimados = tope verde+amarillo</li>
+                    <li><strong>Ingresos:</strong> últimos 6 meses del hogar; mes actual y futuros con el promedio. El punto es el ingreso acumulado del mes actual.</li>
                 </ul>
             </div>
             <div id="chart-loading" class="text-center py-4">
@@ -204,6 +217,10 @@
             </div>
             <div class="chart-container">
                 <canvas id="forecastChart" style="display: none;"></canvas>
+                <canvas id="dailyChart" style="display: none;"></canvas>
+            </div>
+            <div id="daily-empty" class="alert alert-secondary text-center d-none mb-0">
+                <i class="fas fa-inbox"></i> No hay gastos cargados en este mes.
             </div>
         </div>
     </div>
@@ -382,6 +399,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 5000); // 5 segundos timeout
 
+    const chartMonths = {{ chart_months|safe }};
     const currentMonthIndex = {{ current_month_index_json|safe }};
     const incomeCurrentMonthValue = {{ income_current_month_value_json|safe }};
     const incomeAvg6m = {{ income_avg_6m_json|safe }};
@@ -390,15 +408,31 @@ document.addEventListener('DOMContentLoaded', function() {
         return (currentMonthIndex !== null && i === currentMonthIndex) ? incomeCurrentMonthValue : null;
     });
 
-    // Datos del gráfico - Versión corregida
+    // Datos del gráfico: 3 verdes apilados + estimado + líneas
     const chartData = {
         labels: {{ chart_labels|safe }},
         datasets: [
             {
-                label: 'Gastos Reales',
-                data: {{ real_data|safe }},
-                backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                label: 'Gastos del mes',
+                data: {{ real_other_data|safe }},
+                backgroundColor: 'rgba(40, 167, 69, 0.85)',
                 borderColor: 'rgba(40, 167, 69, 1)',
+                borderWidth: 1,
+                stack: 'main'
+            },
+            {
+                label: 'Cuotas / créditos',
+                data: {{ real_credits_data|safe }},
+                backgroundColor: 'rgba(25, 135, 84, 0.85)',
+                borderColor: 'rgba(25, 135, 84, 1)',
+                borderWidth: 1,
+                stack: 'main'
+            },
+            {
+                label: 'Suscripciones',
+                data: {{ real_subs_data|safe }},
+                backgroundColor: 'rgba(32, 201, 151, 0.85)',
+                borderColor: 'rgba(32, 201, 151, 1)',
                 borderWidth: 1,
                 stack: 'main'
             },
@@ -407,7 +441,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: {{ estimated_data|safe }},
                 backgroundColor: 'rgba(255, 193, 7, 0.8)',
                 borderColor: 'rgba(255, 193, 7, 1)',
-                borderWidth: 2, // Aumentar grosor del borde para mejor visibilidad
+                borderWidth: 2,
                 stack: 'main'
             },
             {
@@ -424,7 +458,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 pointBackgroundColor: 'rgba(40, 167, 69, 1)',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
-                // Eje no apilado: si usan 'y' con stacked, Chart.js suma la línea encima de las barras
                 yAxisID: 'yLines'
             },
             {
@@ -512,7 +545,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Datasets:', chartData.datasets);
     
     // Análisis específico de estimated_data para meses futuros
-    const estimatedData = chartData.datasets[1].data;
+    const estimatedData = chartData.datasets[3].data;
     const labels = chartData.labels;
     console.log('\n=== Análisis de Estimado Dinámico (barras amarillas) ===');
     estimatedData.forEach((value, index) => {
@@ -609,22 +642,25 @@ document.addEventListener('DOMContentLoaded', function() {
                                 return label + ': $' + value.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                             },
                             footer: function(tooltipItems) {
-                                // Mostrar total de la barra apilada
-                                let total = 0;
+                                // Total verde (0-2) y total barra (0-3)
+                                let realTotal = 0;
+                                let barTotal = 0;
                                 tooltipItems.forEach(function(tooltipItem) {
-                                    if (tooltipItem.datasetIndex < 2) { // Solo barras, no líneas
-                                        total += tooltipItem.parsed.y || 0;
+                                    if (tooltipItem.datasetIndex <= 2) {
+                                        realTotal += tooltipItem.parsed.y || 0;
+                                    }
+                                    if (tooltipItem.datasetIndex <= 3) {
+                                        barTotal += tooltipItem.parsed.y || 0;
                                     }
                                 });
-                                if (total > 0) {
-                                    if (total >= 1000000) {
-                                        return 'Total: $' + (total / 1000000).toFixed(2) + 'M';
-                                    } else if (total >= 1000) {
-                                        return 'Total: $' + (total / 1000).toFixed(2) + 'K';
-                                    }
-                                    return 'Total: $' + total.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                var lines = [];
+                                if (realTotal > 0) {
+                                    lines.push('Total reales: $' + realTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                                 }
-                                return '';
+                                if (barTotal > 0) {
+                                    lines.push('Total barra: $' + barTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                                }
+                                return lines;
                             }
                         }
                     },
@@ -670,15 +706,25 @@ document.addEventListener('DOMContentLoaded', function() {
                         minBarLength: 2,
                     }
                 },
+                // Click en una barra -> detalle por día de ese mes
+                onClick: (event, activeElements) => {
+                    if (!activeElements || activeElements.length === 0) return;
+                    const idx = activeElements[0].index;
+                    const clave = chartMonths[idx];
+                    if (clave) mostrarDetalleDiario(clave, chartData.labels[idx]);
+                },
                 // Mejorar la visualización de diferencias pequeñas
                 onHover: (event, activeElements) => {
                     if (activeElements.length > 0) {
                         const datasetIndex = activeElements[0].datasetIndex;
                         const index = activeElements[0].index;
-                        if (datasetIndex === 1) { // Dataset de estimado dinámico
-                            const value = chartData.datasets[1].data[index];
+                        if (datasetIndex === 3) { // Estimado dinámico
+                            const value = chartData.datasets[3].data[index];
                             console.log(`Estimado Dinámico para ${chartData.labels[index]}: $${value.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
                         }
+                    }
+                    if (event && event.native && event.native.target) {
+                        event.native.target.style.cursor = activeElements.length > 0 ? 'pointer' : 'default';
                     }
                 }
             }
@@ -711,39 +757,221 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Filtros del gráfico (4 datasets: 2 barras + 2 líneas)
-    document.getElementById('show-real').addEventListener('change', function() {
-        if (chart && chart.getDatasetMeta(0)) {
-            chart.getDatasetMeta(0).hidden = !this.checked;
-            chart.update();
+    // =====================================================================
+    // Detalle diario: click en una barra mensual -> barras por día del mes,
+    // con un color por gasto. Otro click (o el botón) vuelve a la vista mensual.
+    // =====================================================================
+    var dailyChart = null;
+    var tituloMensual = document.getElementById('chart-card-title').innerHTML;
+
+    function formatearPesos(v) {
+        return '$' + Number(v).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    // Colores bien separados entre sí (ángulo áureo sobre el círculo de tonos)
+    function colorPara(i) {
+        var tono = (i * 137.508) % 360;
+        var lum = 48 + ((i % 3) * 7);
+        return 'hsl(' + tono.toFixed(1) + ', 68%, ' + lum + '%)';
+    }
+
+    function volverAVistaMensual() {
+        if (dailyChart) { dailyChart.destroy(); dailyChart = null; }
+        document.getElementById('dailyChart').style.display = 'none';
+        document.getElementById('daily-empty').classList.add('d-none');
+        document.getElementById('forecastChart').style.display = 'block';
+        document.getElementById('chart-card-title').innerHTML = tituloMensual;
+        document.getElementById('chart-back-btn').classList.add('d-none');
+        document.getElementById('chart-drill-hint').classList.remove('d-none');
+        var filtros = document.getElementById('chart-filters-card');
+        if (filtros) filtros.classList.remove('d-none');
+        if (chart && chart.resize) chart.resize();
+    }
+
+    function mostrarDetalleDiario(clave, etiqueta) {
+        var partes = clave.split('-');
+        var anio = partes[0], mes = partes[1];
+        var titulo = document.getElementById('chart-card-title');
+
+        titulo.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando detalle de ' + etiqueta + '...';
+
+        fetch("{% url 'forecasts:daily_expenses' %}?year=" + anio + "&month=" + mes, {
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        })
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(data) {
+            pintarDetalleDiario(data);
+        })
+        .catch(function(err) {
+            console.error('Error cargando el detalle diario:', err);
+            titulo.innerHTML = tituloMensual;
+            alert('No se pudo cargar el detalle del mes: ' + err.message);
+        });
+    }
+
+    function pintarDetalleDiario(data) {
+        // Un dataset por gasto: su monto cae en la columna del día que corresponde.
+        var etiquetasDias = [];
+        for (var d = 1; d <= data.days_in_month; d++) etiquetasDias.push(String(d));
+
+        var datasets = data.expenses.map(function(g, i) {
+            var datos = new Array(data.days_in_month).fill(null);
+            datos[g.day - 1] = g.amount;
+            var color = colorPara(i);
+            return {
+                label: g.name,
+                data: datos,
+                backgroundColor: color,
+                borderColor: 'rgba(255,255,255,0.65)',
+                borderWidth: 1,
+                stack: 'dia',
+                // datos del gasto, para el tooltip
+                gasto: g
+            };
+        });
+
+        document.getElementById('forecastChart').style.display = 'none';
+        var lienzo = document.getElementById('dailyChart');
+        var vacio = document.getElementById('daily-empty');
+
+        document.getElementById('chart-card-title').innerHTML =
+            '<i class="fas fa-calendar-day"></i> Gastos por día &mdash; ' + data.month_label +
+            ' <span class="badge bg-success ms-2">' + formatearPesos(data.total) + '</span>' +
+            ' <span class="badge bg-secondary">' + data.count + ' gasto' + (data.count === 1 ? '' : 's') + '</span>';
+        document.getElementById('chart-back-btn').classList.remove('d-none');
+        document.getElementById('chart-drill-hint').classList.add('d-none');
+        var filtros = document.getElementById('chart-filters-card');
+        if (filtros) filtros.classList.add('d-none');
+
+        if (dailyChart) { dailyChart.destroy(); dailyChart = null; }
+
+        if (datasets.length === 0) {
+            lienzo.style.display = 'none';
+            vacio.classList.remove('d-none');
+            return;
         }
+        vacio.classList.add('d-none');
+        lienzo.style.display = 'block';
+
+        dailyChart = new Chart(lienzo.getContext('2d'), {
+            type: 'bar',
+            data: { labels: etiquetasDias, datasets: datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                aspectRatio: 2,
+                // Cada segmento responde por separado: así el tooltip muestra
+                // el gasto que está debajo del mouse y no todos los del día.
+                interaction: { mode: 'nearest', intersect: true },
+                scales: {
+                    x: {
+                        stacked: true,
+                        title: { display: true, text: 'Día del mes' },
+                        grid: { display: false }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        ticks: {
+                            maxTicksLimit: 8,
+                            callback: function(value) {
+                                if (value >= 1000000) return '$' + (value / 1000000).toFixed(1) + 'M';
+                                if (value >= 1000) return '$' + (value / 1000).toFixed(0) + 'K';
+                                return '$' + value.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        mode: 'nearest',
+                        intersect: true,
+                        displayColors: true,
+                        callbacks: {
+                            title: function(items) {
+                                if (!items.length) return '';
+                                return 'Día ' + items[0].label + ' de ' + data.month_label;
+                            },
+                            label: function(ctx) {
+                                var g = ctx.dataset.gasto || {};
+                                return (g.name || ctx.dataset.label) + ': ' + formatearPesos(ctx.parsed.y);
+                            },
+                            afterLabel: function(ctx) {
+                                var g = ctx.dataset.gasto;
+                                if (!g) return '';
+                                var extra = [];
+                                if (g.category) extra.push('Categoría: ' + g.category);
+                                if (g.user) extra.push('Cargado por: ' + g.user);
+                                if (g.tipo === 'cuota') extra.push('Cuota / crédito');
+                                if (g.tipo === 'suscripcion') extra.push('Suscripción');
+                                return extra;
+                            },
+                            footer: function(items) {
+                                if (!items.length) return '';
+                                var dia = items[0].label;
+                                var totalDia = 0, cuenta = 0;
+                                data.expenses.forEach(function(g) {
+                                    if (String(g.day) === dia) { totalDia += g.amount; cuenta++; }
+                                });
+                                if (cuenta <= 1) return '';
+                                return 'Total del día (' + cuenta + ' gastos): ' + formatearPesos(totalDia);
+                            }
+                        }
+                    }
+                },
+                animation: { duration: 250 },
+                elements: { bar: { borderRadius: 2, maxBarThickness: 36, minBarLength: 3 } },
+                // Otro click vuelve a la vista mensual
+                onClick: function() { volverAVistaMensual(); },
+                onHover: function(event, elementos) {
+                    if (event && event.native && event.native.target) {
+                        event.native.target.style.cursor = elementos.length > 0 ? 'zoom-out' : 'default';
+                    }
+                }
+            }
+        });
+    }
+
+    document.getElementById('chart-back-btn').addEventListener('click', volverAVistaMensual);
+
+    // Filtros del gráfico (índices: 0-2 verdes, 3 estimado, 4-5 líneas máx, 6-7 ingresos)
+    document.getElementById('show-real').addEventListener('change', function() {
+        if (!chart) return;
+        [0, 1, 2].forEach(function(i) {
+            if (chart.getDatasetMeta(i)) chart.getDatasetMeta(i).hidden = !this.checked;
+        }.bind(this));
+        chart.update();
     });
 
     document.getElementById('show-estimated').addEventListener('change', function() {
-        if (chart && chart.getDatasetMeta(1)) {
-            chart.getDatasetMeta(1).hidden = !this.checked;
-            chart.update();
-        }
-    });
-
-    document.getElementById('show-real-line').addEventListener('change', function() {
-        if (chart && chart.getDatasetMeta(2)) {
-            chart.getDatasetMeta(2).hidden = !this.checked;
-            chart.update();
-        }
-    });
-
-    document.getElementById('show-estimated-line').addEventListener('change', function() {
         if (chart && chart.getDatasetMeta(3)) {
             chart.getDatasetMeta(3).hidden = !this.checked;
             chart.update();
         }
     });
 
-    document.getElementById('show-income').addEventListener('change', function() {
+    document.getElementById('show-real-line').addEventListener('change', function() {
         if (chart && chart.getDatasetMeta(4)) {
             chart.getDatasetMeta(4).hidden = !this.checked;
-            if (chart.getDatasetMeta(5)) chart.getDatasetMeta(5).hidden = !this.checked;
+            chart.update();
+        }
+    });
+
+    document.getElementById('show-estimated-line').addEventListener('change', function() {
+        if (chart && chart.getDatasetMeta(5)) {
+            chart.getDatasetMeta(5).hidden = !this.checked;
+            chart.update();
+        }
+    });
+
+    document.getElementById('show-income').addEventListener('change', function() {
+        if (chart && chart.getDatasetMeta(6)) {
+            chart.getDatasetMeta(6).hidden = !this.checked;
+            if (chart.getDatasetMeta(7)) chart.getDatasetMeta(7).hidden = !this.checked;
             chart.update();
         }
     });
