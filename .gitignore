@@ -201,3 +201,10 @@ cookies.txt
 
 # Estáticos generados por collectstatic
 web/staticfiles/
+
+# Respaldos locales: dumps de la base y exports de n8n (contienen datos
+# financieros y secretos). NUNCA versionar.
+/backups/
+*.sql
+*.sql.gz
+*.dump
