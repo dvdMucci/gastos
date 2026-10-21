@@ -1,0 +1,148 @@
+{% load static %}
+{% if has_pie %}
+<div class="card mb-4 category-pie-card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-pie"></i> {{ chart_title|default:"Distribución por categoría" }}</h5>
+        {% if chart_subtitle %}
+        <small class="text-muted">{{ chart_subtitle }}</small>
+        {% endif %}
+        {% if pie_filter_enabled %}
+        <small class="text-muted d-block">Click en una categoría para filtrar</small>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-lg-7 mb-3 mb-lg-0">
+                <div class="category-pie-canvas-wrap{% if pie_filter_enabled %} category-pie-clickable{% endif %}">
+                    <canvas id="{{ chart_id }}"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <ul class="list-unstyled mb-0 small" id="{{ chart_id }}-legend"></ul>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+.category-pie-canvas-wrap {
+    position: relative;
+    height: 300px;
+    width: 100%;
+    min-height: 300px;
+}
+.category-pie-clickable { cursor: pointer; }
+.category-pie-legend-item {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 0.35rem 0.45rem;
+    margin-bottom: 0.25rem !important;
+    transition: background-color 0.15s ease;
+}
+.category-pie-legend-item:hover {
+    background-color: rgba(13, 110, 253, 0.08);
+}
+html[data-theme="dark"] .category-pie-legend-item:hover {
+    background-color: rgba(126, 182, 255, 0.12);
+}
+</style>
+<script src="{% static 'js/chart.min.js' %}"></script>
+<script>
+(function() {
+    function renderPie() {
+        const labels = {{ pie_labels|safe }};
+        const data = {{ pie_data|safe }};
+        const colors = {{ pie_colors|safe }};
+        const ids = {{ pie_ids|default:"[]"|safe }};
+        const filterEnabled = {{ pie_filter_enabled|yesno:"true,false" }};
+        const total = data.reduce(function(a, b) { return a + b; }, 0);
+        const canvas = document.getElementById('{{ chart_id }}');
+        if (!canvas || typeof Chart === 'undefined') {
+            console.error('No se pudo renderizar la torta {{ chart_id }}', {
+                canvas: !!canvas,
+                Chart: typeof Chart
+            });
+            return;
+        }
+
+        function filterByCategory(index) {
+            if (!filterEnabled) return;
+            const categoryId = ids[index];
+            if (categoryId === null || categoryId === undefined || categoryId === '') return;
+            const url = new URL(window.location.href);
+            url.searchParams.set('category', String(categoryId));
+            url.searchParams.delete('page');
+            window.location.href = url.toString();
+        }
+
+        new Chart(canvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: colors,
+                    borderColor: '#ffffff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                onClick: filterEnabled ? function(evt, elements) {
+                    if (elements && elements.length) {
+                        filterByCategory(elements[0].index);
+                    }
+                } : undefined,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed || 0;
+                                const pct = total > 0 ? (value / total * 100) : 0;
+                                return context.label + ': $' + value.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                                    + ' (' + pct.toFixed(1) + '%)';
+                            },
+                            afterLabel: function() {
+                                return filterEnabled ? 'Click para filtrar' : '';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        const legend = document.getElementById('{{ chart_id }}-legend');
+        if (legend) {
+            legend.innerHTML = labels.map(function(label, i) {
+                const value = data[i];
+                const pct = total > 0 ? (value / total * 100) : 0;
+                const clickable = filterEnabled && ids[i] != null;
+                const itemClass = clickable ? 'category-pie-legend-item' : '';
+                const title = clickable ? ' title="Filtrar por ' + label.replace(/"/g, '&quot;') + '"' : '';
+                const dataAttr = clickable ? ' data-category-id="' + ids[i] + '" data-index="' + i + '"' : '';
+                return '<li class="d-flex justify-content-between align-items-center ' + itemClass + '"' + title + dataAttr + '>'
+                    + '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'
+                    + colors[i] + ';margin-right:8px;"></span>' + label + '</span>'
+                    + '<span class="text-muted">$' + value.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})
+                    + ' · ' + pct.toFixed(1) + '%</span></li>';
+            }).join('');
+
+            if (filterEnabled) {
+                legend.querySelectorAll('[data-category-id]').forEach(function(el) {
+                    el.addEventListener('click', function() {
+                        filterByCategory(parseInt(el.getAttribute('data-index'), 10));
+                    });
+                });
+            }
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', renderPie);
+    } else {
+        renderPie();
+    }
+})();
+</script>
+{% endif %}

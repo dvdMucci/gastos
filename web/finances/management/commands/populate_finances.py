@@ -44,6 +44,7 @@ class Command(BaseCommand):
             {'name': 'Salidas', 'icon': 'fas fa-utensils', 'color': '#e91e63'},
             {'name': 'Regalos', 'icon': 'fas fa-gift', 'color': '#ff5722'},
             {'name': 'Hobbies', 'icon': 'fas fa-gamepad', 'color': '#9c27b0'},
+            {'name': 'Streaming', 'icon': 'fas fa-play-circle', 'color': '#e50914'},
             
             # Servicios
             {'name': 'Luz', 'icon': 'fas fa-bolt', 'color': '#ffeb3b'},
@@ -61,6 +62,7 @@ class Command(BaseCommand):
             {'name': 'Electrodomésticos', 'icon': 'fas fa-tv', 'color': '#673ab7'},
             {'name': 'Electrónica', 'icon': 'fas fa-mobile-alt', 'color': '#ff4081'},
             {'name': 'Software', 'icon': 'fas fa-laptop-code', 'color': '#00bcd4'},
+            {'name': 'Tecnología', 'icon': 'fas fa-microchip', 'color': '#7e57c2'},
             
             # Reparaciones
             {'name': 'Reparaciones Casa', 'icon': 'fas fa-home', 'color': '#8bc34a'},
@@ -72,6 +74,8 @@ class Command(BaseCommand):
 
             # Otros
             {'name': 'Imprevistos', 'icon': 'fas fa-exclamation-triangle', 'color': '#f44336'},
+            {'name': 'Impuestos', 'icon': 'fas fa-file-invoice-dollar', 'color': '#546e7a'},
+            {'name': 'Michigan', 'icon': 'fas fa-university', 'color': '#00274c'},
             {'name': 'Donaciones', 'icon': 'fas fa-heart', 'color': '#e91e63'},
             {'name': 'Otros', 'icon': 'fas fa-ellipsis-h', 'color': '#9e9e9e'},
         ]

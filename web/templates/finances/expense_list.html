@@ -23,6 +23,8 @@
         </div>
     </div>
 
+    {% include 'includes/category_pie_chart.html' with chart_id='expenseCategoryPie' chart_title='Distribución por categoría' chart_subtitle=period_display pie_filter_enabled=True %}
+
     <!-- Filtros -->
     <div class="card mb-4">
         <div class="card-header">
@@ -62,6 +64,10 @@
                         {{ form.is_credit }}
                     </div>
                     <div class="col-md-3">
+                        <label class="form-label">Moneda</label>
+                        {{ form.currency }}
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">Monto Mín</label>
                         {{ form.min_amount }}
                     </div>
@@ -69,13 +75,13 @@
                         <label class="form-label">Monto Máx</label>
                         {{ form.max_amount }}
                     </div>
+                </div>
+                <div class="row mt-3">
                     <div class="col-md-3">
                         <label class="form-label">Orden</label>
                         {{ form.sort_order }}
                     </div>
-                </div>
-                <div class="row mt-3">
-                    <div class="col-md-8">
+                    <div class="col-md-5">
                         <label class="form-label">Buscar</label>
                         {{ form.search }}
                     </div>
@@ -159,7 +165,10 @@
                                     <span class="badge bg-secondary">{{ expense.category.name }}</span>
                                 </td>
                                 <td>
-                                    <strong class="text-primary">${{ expense.amount|floatformat:2 }}</strong>
+                                    <strong class="text-primary">${{ expense.display_ars|floatformat:2 }}</strong>
+                                    {% if expense.amount_usd %}
+                                        <br><small class="text-muted">(U${{ expense.amount_usd|floatformat:2 }}{% if not expense.fx_locked %} · est.{% endif %})</small>
+                                    {% endif %}
                                     {% if expense.is_credit %}
                                         <br><small class="text-muted">Cuota {{ expense.current_installment }}/{{ expense.installments }}</small>
                                     {% endif %}
@@ -234,7 +243,10 @@
                         {% endif %}
                         <div class="row text-center">
                             <div class="col-6">
-                                <strong class="text-primary">${{ expense.amount|floatformat:2 }}</strong>
+                                <strong class="text-primary">${{ expense.display_ars|floatformat:2 }}</strong>
+                                {% if expense.amount_usd %}
+                                    <br><small class="text-muted">(U${{ expense.amount_usd|floatformat:2 }})</small>
+                                {% endif %}
                                 <br><small class="text-muted">Monto</small>
                             </div>
                             <div class="col-6">

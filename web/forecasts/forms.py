@@ -1,6 +1,7 @@
 from django import forms
 from .models import ExpenseForecast
 from finances.models import Category, PaymentMethod, PaymentType
+from core.widgets import Html5DateInput
 import calendar
 
 class ExpenseForecastForm(forms.ModelForm):
@@ -21,8 +22,8 @@ class ExpenseForecastForm(forms.ModelForm):
             'payment_method': forms.Select(attrs={'class': 'form-control', 'id': 'id_payment_method'}),
             'payment_type': forms.Select(attrs={'class': 'form-control', 'id': 'id_payment_type'}),
             'expense_type': forms.Select(attrs={'class': 'form-control'}),
-            'start_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
-            'end_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'start_date': Html5DateInput(),
+            'end_date': Html5DateInput(),
             'frequency': forms.Select(attrs={'class': 'form-control'}),
             'confidence': forms.Select(attrs={'class': 'form-control'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -30,6 +31,8 @@ class ExpenseForecastForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from core.widgets import configure_html5_date_fields
+        configure_html5_date_fields(self, 'start_date', 'end_date')
         # Agregar clases CSS para campos de fecha
         if self.instance.pk and self.instance.end_date:
             self.fields['end_date'].widget.attrs['class'] += ' end-date-field'

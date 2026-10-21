@@ -16,20 +16,12 @@ from rest_framework.filters import OrderingFilter
 from .models import Expense, Category, PaymentMethod, PaymentType, MonthlySummary
 from .forms import ExpenseForm, ExpenseFilterForm
 from .serializers import ExpenseSerializer, CategorySerializer, PaymentMethodSerializer, PaymentTypeSerializer
+from .dates import get_first_monday
 from accounts.models import CustomUser
-
-def get_first_monday(year, month):
-    """Calculate the first Monday of a given month, handling special case when 1st is Monday"""
-    first_day = datetime(year, month, 1).date()
-    if first_day.weekday() == 0:  # Monday
-        return first_day + timedelta(days=7)  # Next Monday (8th)
-    else:
-        days_to_monday = (7 - first_day.weekday()) % 7
-        return first_day + timedelta(days=days_to_monday)
 
 EXPENSE_FILTER_KEYS = (
     'date_from', 'date_to', 'category', 'payment_method', 'payment_type',
-    'user', 'is_credit', 'min_amount', 'max_amount', 'search',
+    'user', 'is_credit', 'currency', 'min_amount', 'max_amount', 'search',
 )
 
 
@@ -83,6 +75,13 @@ def filter_expenses(form, show_all=False):
         elif is_credit_value == 'False':
             expenses = expenses.filter(is_credit=False)
         # Si es string vacío o None, no filtrar
+
+    # Filtro por moneda (gastos originados en USD vs solo ARS)
+    currency = form.cleaned_data.get('currency')
+    if currency == 'USD':
+        expenses = expenses.filter(amount_usd__isnull=False)
+    elif currency == 'ARS':
+        expenses = expenses.filter(amount_usd__isnull=True)
 
     # Filtro por monto mínimo
     if form.cleaned_data.get('min_amount'):
@@ -159,6 +158,7 @@ def expense_list(request):
         user_filter_display = form.cleaned_data['user'].username
 
     credit_labels = {'True': 'Solo créditos', 'False': 'Solo contado'}
+    currency_labels = {'ARS': 'Solo pesos', 'USD': 'Solo dólares'}
     active_filters = build_active_filter_chips(
         request,
         form,
@@ -170,6 +170,7 @@ def expense_list(request):
             ('payment_type', 'Tipo', lambda v: v.name),
             ('user', 'Usuario', lambda v: v.username),
             ('is_credit', 'Crédito', lambda v: credit_labels.get(v, v)),
+            ('currency', 'Moneda', lambda v: currency_labels.get(v, v)),
             ('min_amount', 'Mín', lambda v: f'${v}'),
             ('max_amount', 'Máx', lambda v: f'${v}'),
             ('search', 'Buscar', None),
@@ -183,14 +184,26 @@ def expense_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
+    from core.fx import get_dollar_quotation
+    from core.charts import expense_category_pie
+
+    dollar_rate = get_dollar_quotation()
+    display_total = 0
+    for expense in page_obj:
+        expense.display_ars = expense.display_amount_ars(rate=dollar_rate)
+        display_total += float(expense.display_ars)
+
     context = {
         'expenses': page_obj,
         'form': form,
         'total_amount': total_amount,
+        'page_display_total': display_total,
+        'dollar_rate': dollar_rate,
         'period_display': period_display,
         'user_filter_display': user_filter_display,
         'active_filters': active_filters,
     }
+    context.update(expense_category_pie(expenses))
 
     return render(request, 'finances/expense_list.html', context)
 
@@ -523,6 +536,8 @@ def dashboard_finances(request):
     expenses_by_category = current_month_expenses.values('category__name').annotate(
         total=Sum('amount')
     ).order_by('-total')
+
+    from core.charts import expense_category_pie
     
     # Créditos pendientes
     credit_pending = Expense.objects.filter(
@@ -571,6 +586,7 @@ def dashboard_finances(request):
         'current_month': current_month,
         'current_year': current_year
     }
+    context.update(expense_category_pie(current_month_expenses))
     return render(request, 'finances/dashboard.html', context)
 
 @login_required

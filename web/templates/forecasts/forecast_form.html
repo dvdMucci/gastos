@@ -146,34 +146,37 @@
 document.addEventListener('DOMContentLoaded', function() {
     const paymentMethodSelect = document.getElementById('id_payment_method');
     const paymentTypeSelect = document.getElementById('id_payment_type');
-    
+    if (!paymentMethodSelect || !paymentTypeSelect) return;
+
+    const selectedTypeId = paymentTypeSelect.value;
+
     function updatePaymentTypes() {
         const selectedMethod = paymentMethodSelect.value;
-        
-        // Limpiar opciones actuales
         paymentTypeSelect.innerHTML = '<option value="">---------</option>';
-        
-        if (selectedMethod) {
-            // Hacer petición AJAX para obtener tipos de pago
-            fetch(`/finances/ajax/payment-types/?payment_method=${selectedMethod}`)
-                .then(response => response.json())
-                .then(data => {
-                    data.forEach(paymentType => {
-                        const option = document.createElement('option');
-                        option.value = paymentType.id;
-                        option.textContent = paymentType.name;
-                        if (paymentType.is_default) {
-                            option.selected = true;
-                        }
-                        paymentTypeSelect.appendChild(option);
-                    });
+
+        if (!selectedMethod) return;
+
+        fetch(`/finances/get-payment-types/?payment_method=${selectedMethod}`)
+            .then(response => response.json())
+            .then(data => {
+                const types = data.payment_types || [];
+                types.forEach(paymentType => {
+                    const option = document.createElement('option');
+                    option.value = paymentType.id;
+                    option.textContent = paymentType.name;
+                    if (
+                        String(paymentType.id) === String(selectedTypeId) ||
+                        (!selectedTypeId && paymentType.is_default)
+                    ) {
+                        option.selected = true;
+                    }
+                    paymentTypeSelect.appendChild(option);
                 });
-        }
+            })
+            .catch(error => console.error('Error loading payment types:', error));
     }
-    
+
     paymentMethodSelect.addEventListener('change', updatePaymentTypes);
-    
-    // Ejecutar al cargar la página si ya hay un método seleccionado
     if (paymentMethodSelect.value) {
         updatePaymentTypes();
     }

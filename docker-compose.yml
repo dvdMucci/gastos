@@ -33,7 +33,7 @@ services:
       - ./web:/app  # Mapea tu código local para desarrollo en tiempo real
     # Se sacó 'makemigrations' del arranque: generaba migraciones automáticas
     # contra la base productiva. Las migraciones se crean a mano y se commitean.
-    command: ["./wait-for-db.sh", "sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py populate_finances && python create_superuser.py && python manage.py create_subscription_expenses && exec gunicorn web.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -"]
+    command: ["./wait-for-db.sh", "sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py populate_finances && python create_superuser.py && python manage.py create_subscription_expenses --months-ahead=12 && exec gunicorn web.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -"]
 
     ports:
       - "5800:8000"

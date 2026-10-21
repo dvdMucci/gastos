@@ -913,9 +913,13 @@ class MonthlyForecast(models.Model):
         from .models import ExpenseForecast
 
         # 1. GASTOS REALES PROGRAMADOS PARA ESE MES FUTURO:
-        # a) Suscripciones activas del hogar (ambos usuarios; coherente con gastos agregados)
-        subscriptions = Subscription.objects.filter(status='active')
-        real_subscriptions = sum(sub.get_monthly_amount() for sub in subscriptions)
+        # a) Suscripciones del mes: gastos ya generados con subscription (hogar)
+        real_subscriptions = Expense.objects.filter(
+            date__year=month_date.year,
+            date__month=month_date.month,
+            is_credit=False,
+            subscription__isnull=False,
+        ).aggregate(total=models.Sum('amount'))['total'] or 0
 
         # b) Cuotas de créditos programadas para ese mes (gastos reales con fecha específica)
         # IMPORTANTE: Buscar TODAS las cuotas de créditos que están programadas para ese mes

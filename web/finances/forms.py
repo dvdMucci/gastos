@@ -2,6 +2,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from .models import Expense, Category, PaymentMethod, PaymentType
 from accounts.models import CustomUser
+from core.widgets import Html5DateInput
 
 class ExpenseForm(forms.ModelForm):
     """Formulario para crear/editar gastos"""
@@ -13,7 +14,7 @@ class ExpenseForm(forms.ModelForm):
             'payment_type', 'description', 'is_credit', 'total_credit_amount'
         ]
         widgets = {
-            'date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'date': Html5DateInput(),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'category': forms.Select(attrs={'class': 'form-control'}),
@@ -26,6 +27,8 @@ class ExpenseForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from core.widgets import configure_html5_date_fields
+        configure_html5_date_fields(self, 'date')
         # Ocultar campos de crédito inicialmente
         self.fields['is_credit'].widget = forms.HiddenInput()
         self.fields['total_credit_amount'].widget = forms.HiddenInput()
@@ -89,12 +92,14 @@ class ExpenseForm(forms.ModelForm):
 class ExpenseFilterForm(forms.Form):
     date_from = forms.DateField(
         required=False,
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        input_formats=['%Y-%m-%d'],
+        widget=Html5DateInput(),
         label='Desde'
     )
     date_to = forms.DateField(
         required=False,
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        input_formats=['%Y-%m-%d'],
+        widget=Html5DateInput(),
         label='Hasta'
     )
     category = forms.ModelChoiceField(
@@ -134,6 +139,16 @@ class ExpenseFilterForm(forms.Form):
         required=False,
         widget=forms.Select(attrs={'class': 'form-control'}),
         label='Crédito'
+    )
+    currency = forms.ChoiceField(
+        choices=[
+            ('', 'Todas'),
+            ('ARS', 'Solo pesos'),
+            ('USD', 'Solo dólares'),
+        ],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label='Moneda',
     )
     min_amount = forms.DecimalField(
         required=False,

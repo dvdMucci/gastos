@@ -102,7 +102,20 @@ class Expense(models.Model):
     
     # Campo para suscripciones
     subscription = models.ForeignKey('subscriptions.Subscription', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Suscripción')
-    
+
+    # FX / suscripciones en USD (amount siempre en ARS para totales)
+    amount_usd = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, verbose_name='Monto USD'
+    )
+    cotizacion_dolar = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, verbose_name='Cotización dólar'
+    )
+    fx_locked = models.BooleanField(
+        default=False,
+        verbose_name='Cotización fijada',
+        help_text='True cuando el ARS ya se fijó el día de pago/cierre.',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Última actualización')
 
@@ -151,19 +164,30 @@ class Expense(models.Model):
         return self.current_installment == self.installments
     
     def get_next_installment_date(self):
-        """Calcula la fecha de la siguiente cuota"""
+        """Fecha de la siguiente cuota (primer lunes del mes siguiente con día >= 7)."""
         if self.is_credit and not self.is_last_installment():
-            # Obtener el primer día del siguiente mes
+            from finances.dates import get_card_payment_monday
             if self.date.month == 12:
-                next_month = 1
-                next_year = self.date.year + 1
+                next_month, next_year = 1, self.date.year + 1
             else:
-                next_month = self.date.month + 1
-                next_year = self.date.year
-            
-            return datetime(next_year, next_month, 1).date()
+                next_month, next_year = self.date.month + 1, self.date.year
+            return get_card_payment_monday(next_year, next_month)
         return None
-    
+
+    def display_amount_ars(self, rate=None):
+        """
+        ARS a mostrar en listados.
+        Si es USD y aún no está fijado, usa cotización del día; si está fijado, el amount guardado.
+        """
+        from decimal import Decimal
+        from core.fx import usd_to_ars
+
+        if self.amount_usd is not None and not self.fx_locked:
+            ars = usd_to_ars(self.amount_usd, rate=rate)
+            if ars is not None:
+                return ars
+        return Decimal(str(self.amount))
+
     def get_related_credit_expenses(self):
         """Obtener gastos de crédito relacionados"""
         if self.credit_group_id:

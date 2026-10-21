@@ -104,23 +104,9 @@ class Income(models.Model):
         return f"{self.source.name} - ${self.amount} ({self.date})"
 
     def get_dollar_quotation(self):
-        """Fetch current dollar quotation from API"""
-        try:
-            response = requests.get('https://dolarapi.com/v1/dolares', timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            logger.info(f"API data: {data}")
-
-            # Find the "blue" dollar rate
-            for rate in data:
-                if rate.get('casa') == 'blue':
-                    compra = rate.get('compra')
-                    logger.info(f"compra: {compra}, type: {type(compra)}")
-                    if compra is not None:
-                        return Decimal(compra)
-        except (requests.RequestException, ValueError, KeyError) as e:
-            logger.error(f"Error fetching dollar quotation: {e}")
-        return None
+        """Fetch current dollar quotation from API (blue/compra)."""
+        from core.fx import get_dollar_quotation
+        return get_dollar_quotation()
 
     def save(self, *args, **kwargs):
         logger.info(f"Save called: amount={self.amount} (type: {type(self.amount)}), cotizacion_dolar={self.cotizacion_dolar} (type: {type(self.cotizacion_dolar)})")

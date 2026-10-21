@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from .models import Income, IncomeCategory, IncomeSource
 from accounts.models import CustomUser
+from core.widgets import Html5DateInput
 
 
 class IncomeForm(forms.ModelForm):
@@ -15,7 +16,7 @@ class IncomeForm(forms.ModelForm):
             'is_recurring', 'recurring_frequency'
         ]
         widgets = {
-            'date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'date': Html5DateInput(),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'category': forms.Select(attrs={'class': 'form-control'}),
@@ -26,6 +27,8 @@ class IncomeForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from core.widgets import configure_html5_date_fields
+        configure_html5_date_fields(self, 'date')
         # Set required fields
         self.fields['amount'].required = True
         self.fields['date'].required = True
@@ -65,12 +68,14 @@ class IncomeForm(forms.ModelForm):
 class IncomeFilterForm(forms.Form):
     date_from = forms.DateField(
         required=False,
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        input_formats=['%Y-%m-%d'],
+        widget=Html5DateInput(),
         label='Desde'
     )
     date_to = forms.DateField(
         required=False,
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        input_formats=['%Y-%m-%d'],
+        widget=Html5DateInput(),
         label='Hasta'
     )
     category = forms.ModelChoiceField(

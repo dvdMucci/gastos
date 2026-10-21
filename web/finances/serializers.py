@@ -1,18 +1,9 @@
 from rest_framework import serializers
 from .models import Expense, Category, PaymentMethod, PaymentType
 from accounts.models import CustomUser
+from .dates import get_first_monday
 from datetime import datetime, timedelta
 import uuid
-
-
-def get_first_monday(year, month):
-    """Calculate the first Monday of a given month, handling special case when 1st is Monday"""
-    first_day = datetime(year, month, 1).date()
-    if first_day.weekday() == 0:  # Monday
-        return first_day + timedelta(days=7)  # Next Monday (8th)
-    else:
-        days_to_monday = (7 - first_day.weekday()) % 7
-        return first_day + timedelta(days=days_to_monday)
 
 
 class CategorySerializer(serializers.ModelSerializer):

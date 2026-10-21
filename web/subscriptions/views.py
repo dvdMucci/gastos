@@ -13,18 +13,23 @@ from .forms import SubscriptionForm, SubscriptionFilterForm
 @login_required
 def subscription_list(request):
     """Lista de suscripciones con filtros y paginación"""
-    subscriptions = Subscription.objects.all()
-    
-    # Aplicar filtros
+    from decimal import Decimal
+    from core.fx import get_dollar_quotation
+
+    subscriptions = Subscription.objects.select_related(
+        'user', 'category', 'payment_method', 'payment_type'
+    )
+
     form = SubscriptionFilterForm(request.GET)
     if form.is_valid():
         status = form.cleaned_data.get('status')
         frequency = form.cleaned_data.get('frequency')
         category = form.cleaned_data.get('category')
         payment_method = form.cleaned_data.get('payment_method')
+        currency = form.cleaned_data.get('currency')
         search = form.cleaned_data.get('search')
         sort_order = form.cleaned_data.get('sort_order', 'start_date')
-        
+
         if status:
             subscriptions = subscriptions.filter(status=status)
         if frequency:
@@ -33,36 +38,47 @@ def subscription_list(request):
             subscriptions = subscriptions.filter(category=category)
         if payment_method:
             subscriptions = subscriptions.filter(payment_method=payment_method)
+        if currency:
+            subscriptions = subscriptions.filter(currency=currency)
         if search:
             subscriptions = subscriptions.filter(
                 Q(name__icontains=search) | Q(description__icontains=search)
             )
-        
-        # Aplicar ordenamiento
         subscriptions = subscriptions.order_by(sort_order)
     else:
-        # Sin filtros, ordenar por fecha de inicio
         subscriptions = subscriptions.order_by('-start_date')
-    
-    # Paginación
-    paginator = Paginator(subscriptions, 20)
+
+    rate = get_dollar_quotation()
+    from core.charts import subscription_category_pie
+
+    # Totales en ARS al día de hoy (solo activas del queryset filtrado)
+    total_monthly_ars = Decimal('0.00')
+    total_active_ars = Decimal('0.00')
+    # Evaluar una sola vez para totales + torta (evita N queries extra)
+    subscription_list = list(subscriptions)
+    for sub in subscription_list:
+        if sub.status != 'active' or not sub.is_active():
+            continue
+        ars = sub.amount_ars_today(rate=rate)
+        total_active_ars += ars
+        total_monthly_ars += sub.monthly_ars_equivalent(rate=rate)
+
+    paginator = Paginator(subscription_list, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
-    # Estadísticas
-    total_monthly = subscriptions.filter(
-        status='active',
-        frequency='monthly'
-    ).aggregate(total=Sum('amount'))['total'] or 0
-    
-    total_active = subscriptions.filter(status='active').aggregate(total=Sum('amount'))['total'] or 0
-    
+
+    # Adjuntar display ARS a cada ítem de la página
+    for sub in page_obj:
+        sub.display_ars = sub.amount_ars_today(rate=rate)
+
     context = {
         'page_obj': page_obj,
         'form': form,
-        'total_monthly': total_monthly,
-        'total_active': total_active,
+        'total_monthly': total_monthly_ars,
+        'total_active': total_active_ars,
+        'dollar_rate': rate,
     }
+    context.update(subscription_category_pie(subscription_list, rate=rate))
     return render(request, 'subscriptions/subscription_list.html', context)
 
 @login_required
@@ -109,12 +125,13 @@ def subscription_edit(request, subscription_id):
 
 @login_required
 def subscription_delete(request, subscription_id):
-    """Eliminar suscripción"""
+    """Eliminar suscripción (también borra gastos futuros materializados)."""
     subscription = get_object_or_404(Subscription, id=subscription_id)
     
     if request.method == 'POST':
+        # Subscription.delete() limpia gastos futuros antes del SET_NULL del FK
         subscription.delete()
-        messages.success(request, 'Suscripción eliminada correctamente')
+        messages.success(request, 'Suscripción y gastos futuros eliminados correctamente')
         return redirect('subscriptions:subscription_list')
     
     context = {
@@ -171,10 +188,21 @@ def subscription_dashboard(request):
     # Suscripciones activas
     active_subscriptions = Subscription.objects.filter(status='active')
     
-    # Total mensual de suscripciones activas
-    monthly_total = active_subscriptions.filter(frequency='monthly').aggregate(
-        total=Sum('amount')
-    )['total'] or 0
+    # Total mensual equivalente de suscripciones activas
+    monthly_total = 0
+    for subscription in active_subscriptions:
+        if not subscription.is_active():
+            continue
+        if subscription.frequency == 'weekly':
+            monthly_total += float(subscription.amount) * 4.33
+        elif subscription.frequency == 'monthly':
+            monthly_total += float(subscription.amount)
+        elif subscription.frequency == 'quarterly':
+            monthly_total += float(subscription.amount) / 3
+        elif subscription.frequency == 'biannual':
+            monthly_total += float(subscription.amount) / 6
+        elif subscription.frequency == 'annual':
+            monthly_total += float(subscription.amount) / 12
     
     # Próximos pagos (próximo mes)
     next_month = current_month + 1 if current_month < 12 else 1
@@ -213,7 +241,10 @@ def subscription_dashboard(request):
         # Calcular total del mes basándose en la frecuencia y fecha de inicio
         month_total = 0
         for subscription in active_subscriptions:
-            if subscription.frequency == 'monthly':
+            if subscription.frequency == 'weekly':
+                # ~4.3 semanas/mes; usamos 4 para el resumen del dashboard
+                month_total += subscription.amount * 4
+            elif subscription.frequency == 'monthly':
                 month_total += subscription.amount
             elif subscription.frequency == 'quarterly' and month % 3 == 1:
                 month_total += subscription.amount
@@ -230,14 +261,36 @@ def subscription_dashboard(request):
         })
     
     months_data.reverse()
+
+    from core.charts import subscription_category_pie
+    from core.fx import get_dollar_quotation
+    from decimal import Decimal
+
+    rate = get_dollar_quotation()
+    # Total activo en ARS (la plantilla lo muestra; antes faltaba en el context)
+    total_active = Decimal('0.00')
+    for subscription in active_subscriptions:
+        if subscription.is_active():
+            total_active += subscription.amount_ars_today(rate=rate)
+
+    # Recalcular monthly_total en ARS (incluye USD)
+    monthly_total_ars = Decimal('0.00')
+    for subscription in active_subscriptions:
+        if subscription.is_active():
+            monthly_total_ars += subscription.monthly_ars_equivalent(rate=rate)
     
     context = {
-        'monthly_total': monthly_total,
+        'monthly_total': monthly_total_ars,
+        'total_active': total_active,
         'upcoming_payments': upcoming_payments,
         'due_soon': due_soon,
         'overdue': overdue,
         'months_data': months_data,
         'current_month': current_month,
-        'current_year': current_year
+        'current_year': current_year,
+        'next_month': next_month,
+        'next_year': next_year,
+        'dollar_rate': rate,
     }
+    context.update(subscription_category_pie(active_subscriptions, rate=rate))
     return render(request, 'subscriptions/dashboard.html', context)

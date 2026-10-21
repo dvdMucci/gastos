@@ -215,15 +215,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getFirstMonday(year, month) {
-        // month: 1-12 — same logic as backend get_first_monday
+        // Primer lunes del mes con día >= 7 (igual que finances.dates.get_card_payment_monday)
         const firstDay = new Date(year, month - 1, 1);
-        const weekday = firstDay.getDay(); // 0=Sun ... 1=Mon
-        const mondayIndex = 1;
-        let daysToMonday = (mondayIndex - weekday + 7) % 7;
+        const weekday = firstDay.getDay(); // 0=Sun, 1=Mon
+        let daysToMonday = (1 - weekday + 7) % 7;
         let result = new Date(year, month - 1, 1 + daysToMonday);
-        if (weekday === 1) {
-            // If 1st is Monday, backend uses the next Monday (8th)
-            result = new Date(year, month - 1, 8);
+        if (result.getDate() < 7) {
+            result = new Date(year, month - 1, result.getDate() + 7);
         }
         return result;
     }

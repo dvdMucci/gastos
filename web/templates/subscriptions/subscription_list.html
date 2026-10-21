@@ -14,6 +14,8 @@
     </div>
 </div>
 
+{% include 'includes/category_pie_chart.html' with chart_id='subscriptionCategoryPie' chart_title='Distribución por categoría' chart_subtitle='Equivalente mensual en pesos (suscripciones activas)' pie_filter_enabled=True %}
+
 <!-- Filtros -->
 <div class="row mb-4">
     <div class="col-12">
@@ -40,6 +42,10 @@
                         {{ form.payment_method }}
                     </div>
                     <div class="col-md-2">
+                        {{ form.currency.label_tag }}
+                        {{ form.currency }}
+                    </div>
+                    <div class="col-md-2">
                         {{ form.sort_order.label_tag }}
                         {{ form.sort_order }}
                     </div>
@@ -63,19 +69,30 @@
 
 <!-- Estadísticas -->
 <div class="row mb-4">
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card bg-primary text-white">
             <div class="card-body">
-                <h5>Total Mensual Activo</h5>
+                <h5>Total mensual equiv. (activas)</h5>
                 <h3>${{ total_monthly|floatformat:2 }}</h3>
+                <small>USD convertidos al blue de hoy{% if dollar_rate %} ({{ dollar_rate }}){% endif %}</small>
             </div>
         </div>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card bg-success text-white">
             <div class="card-body">
-                <h5>Total Activo</h5>
+                <h5>Suma de montos (activas)</h5>
                 <h3>${{ total_active|floatformat:2 }}</h3>
+                <small>Cada suscripción en pesos al día de hoy</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5>Cotización blue</h5>
+                <h3>{% if dollar_rate %}${{ dollar_rate|floatformat:2 }}{% else %}N/D{% endif %}</h3>
+                <small>Compra (dolarapi)</small>
             </div>
         </div>
     </div>
@@ -116,7 +133,12 @@
                                         <span class="badge bg-info">{{ subscription.user.username }}</span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-success">${{ subscription.amount|floatformat:2 }}</span>
+                                        {% if subscription.currency == 'USD' %}
+                                            <strong>${{ subscription.display_ars|floatformat:2 }}</strong>
+                                            <br><small class="text-muted">(U${{ subscription.amount|floatformat:2 }})</small>
+                                        {% else %}
+                                            <strong>${{ subscription.amount|floatformat:2 }}</strong>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         <span class="badge bg-secondary">{{ subscription.get_frequency_display }}</span>
